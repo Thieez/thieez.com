@@ -16,9 +16,13 @@ Set `VITE_API_BASE` to point at a local API during development; production defau
 The project index requests `GET /projects/v0`, accepting either a project array
 or `{ "projects": [...] }`. The API is the only source of project visibility;
 there are no built-in projects or topic-based fallback entries. A 404/405
-returns an empty project list; other API failures remain visible as an error state. Asset download
+returns an empty project list; other API failures remain visible as an error
+state. Asset download
 URLs are resolved against the API origin, including when the API returns a
 relative path.
+
+The homepage subscribes to `wss://api.thieez.com/projects/v0/updates` and
+refreshes the list after a signed GitHub `Repository` webhook event.
 
 The header also supports Google login through the same OAuth flow as the
 Obsidian plugin (`/auth/v0/login`). The returned access and refresh tokens are
