@@ -14,7 +14,7 @@ button{font:inherit}
 .auth-button{border:1px solid var(--lime);background:var(--lime);color:var(--ink);padding:6px 10px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0}
 .auth-button-muted{border-color:#6d6a63;background:transparent;color:#fff}
 .auth-button:hover{filter:brightness(.92)}
-.status-dot{width:6px;height:6px;border-radius:50%;box-shadow:0 0 0 4px rgba(169,165,157,.12)}
+.status-dot{display:inline-block;width:6px;height:6px;margin:0 .12em;vertical-align:.12em;border-radius:50%;box-shadow:0 0 0 4px rgba(169,165,157,.12)}
 .status-online{background:var(--lime);box-shadow:0 0 0 4px rgba(215,243,74,.12)}
 .status-degraded{background:#e8b84a;box-shadow:0 0 0 4px rgba(232,184,74,.12)}
 .status-offline{background:#e56b5d;box-shadow:0 0 0 4px rgba(229,107,93,.12)}

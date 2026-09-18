@@ -5,6 +5,7 @@
 
   let isLisnnto = false;
   let isNote = false;
+  let projectName = '';
   let projects: Project[] = [];
   let build: LatestBuild | null = null;
   let loading = true;
@@ -18,8 +19,18 @@
     if (!browser) return;
     const params = new URLSearchParams(window.location.search);
     const hostname = window.location.hostname.toLowerCase();
-    isLisnnto = hostname === 'lisnnto.thieez.com' || params.get('project') === 'lisnnto';
-    isNote = hostname === 'note.thieez.com' || params.get('project') === 'note';
+    const hostProject = hostname.endsWith('.thieez.com')
+      ? hostname.slice(0, -'.thieez.com'.length)
+      : '';
+    const configuredProject = params.get('project')?.trim().toLowerCase() || '';
+    const projectSlug = configuredProject || (hostProject !== 'www' && hostProject !== 'api' ? hostProject : '');
+    projectName = projectSlug
+      .split('-')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+    isLisnnto = projectSlug === 'lisnnto';
+    isNote = projectSlug === 'note';
   };
 
   const load = async () => {
@@ -94,10 +105,18 @@
 
 <div class="site-shell">
   <header class="masthead">
-    <a class="wordmark" href="https://thieez.com/">Thieez<span class="wordmark-dot">.</span></a>
+    <a class="wordmark" href="https://thieez.com/">
+      {#if projectName}{projectName}{/if}<span
+        class:status-online={apiStatus === 'online'}
+        class:status-degraded={apiStatus === 'degraded'}
+        class:status-offline={apiStatus === 'offline'}
+        class="status-dot"
+        role="img"
+        aria-label={`API status: ${apiStatus}`}
+        title={`API status: ${apiStatus}`}
+      ></span>Thieez
+    </a>
     <div class="header-meta">
-      <span class:status-online={apiStatus === 'online'} class:status-degraded={apiStatus === 'degraded'} class:status-offline={apiStatus === 'offline'} class="status-dot" aria-hidden="true"></span>
-      <span>API {apiStatus} / {API_BASE.replace(/^https?:\/\//, '')}</span>
       {#if !authLoading}
         {#if authSession}
           <span class="auth-user">{authSession.user?.name || authSession.user?.email || 'Account'}</span>
