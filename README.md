@@ -14,8 +14,10 @@ Set `VITE_API_BASE` to point at a local API during development; production defau
 `window.location.hostname`. For local testing, use `/?project=lisnnto`.
 
 The project index requests `GET /projects/v0`, accepting either a project array
-or `{ "projects": [...] }`. Note and Lisnnto are always included as known
-projects, so a project API response cannot hide a configured product domain.
+or `{ "projects": [...] }`. The API selects repositories using the GitHub App
+installation and its configured project topic, including private repositories.
+Note and Lisnnto are always included as known projects, so a project API
+response cannot hide a configured product domain.
 Until that endpoint exists, a 404/405 uses both built-in project entries as the
 fallback; other API failures remain visible as an error state. Asset download
 URLs are resolved against the API origin, including when the API returns a
