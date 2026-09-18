@@ -106,7 +106,7 @@
 <div class="site-shell">
   <header class="masthead">
     <a class="wordmark" href="https://thieez.com/">
-      {#if projectName}<span>{projectName}</span>{/if}<span
+      {#if projectName}<span class="project-word">{projectName}</span>{/if}<span
           class:status-online={apiStatus === 'online'}
           class:status-degraded={apiStatus === 'degraded'}
           class:status-offline={apiStatus === 'offline'}
