@@ -106,15 +106,15 @@
 <div class="site-shell">
   <header class="masthead">
     <a class="wordmark" href="https://thieez.com/">
-      {#if projectName}{projectName}{/if}<span
-        class:status-online={apiStatus === 'online'}
-        class:status-degraded={apiStatus === 'degraded'}
-        class:status-offline={apiStatus === 'offline'}
-        class="status-dot"
-        role="img"
-        aria-label={`API status: ${apiStatus}`}
-        title={`API status: ${apiStatus}`}
-      ></span>Thieez
+      {#if projectName}<span>{projectName}</span>{/if}<span
+          class:status-online={apiStatus === 'online'}
+          class:status-degraded={apiStatus === 'degraded'}
+          class:status-offline={apiStatus === 'offline'}
+          class="status-dot"
+          role="img"
+          aria-label={`API status: ${apiStatus}`}
+          title={`API status: ${apiStatus}`}
+        ></span><span>Thieez</span>
     </a>
     <div class="header-meta">
       {#if !authLoading}

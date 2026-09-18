@@ -6,7 +6,7 @@ a{color:inherit}
 button{font:inherit}
 .site-shell{min-height:100vh;display:flex;flex-direction:column}
 .masthead{height:82px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 clamp(22px,5vw,72px)}
-.wordmark{font-size:26px;font-weight:800;letter-spacing:-.07em;text-decoration:none}
+.wordmark{display:inline-flex;align-items:baseline;gap:.28em;font-size:26px;font-weight:800;letter-spacing:-.07em;text-decoration:none}
 .wordmark-dot{color:var(--lime)}
 .header-meta,.eyebrow,.release-label,.project-meta,.section-heading span,.footer{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
 .header-meta{font-size:10px;letter-spacing:.08em;color:#a9a59d;display:flex;align-items:center;gap:8px;text-transform:uppercase}
@@ -14,7 +14,7 @@ button{font:inherit}
 .auth-button{border:1px solid var(--lime);background:var(--lime);color:var(--ink);padding:6px 10px;font-size:10px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0}
 .auth-button-muted{border-color:#6d6a63;background:transparent;color:#fff}
 .auth-button:hover{filter:brightness(.92)}
-.status-dot{display:inline-block;width:6px;height:6px;margin:0 .28em;vertical-align:-.08em;border-radius:50%;box-shadow:0 0 0 4px rgba(169,165,157,.12)}
+.status-dot{display:inline-block;width:6px;height:6px;transform:translateY(.08em);border-radius:50%;box-shadow:0 0 0 4px rgba(169,165,157,.12)}
 .status-online{background:var(--lime);box-shadow:0 0 0 4px rgba(215,243,74,.12)}
 .status-degraded{background:#e8b84a;box-shadow:0 0 0 4px rgba(232,184,74,.12)}
 .status-offline{background:#e56b5d;box-shadow:0 0 0 4px rgba(229,107,93,.12)}
