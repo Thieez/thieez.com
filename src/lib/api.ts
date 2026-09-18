@@ -4,6 +4,7 @@ export const AUTH_BASE = `${API_BASE}/auth/v0`;
 
 const AUTH_STORAGE_KEY = 'thieez.auth';
 const DEVICE_STORAGE_KEY = 'thieez.device_id';
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export type AuthUser = {
   id?: string;
@@ -81,7 +82,7 @@ function writeSession(session: AuthSession | null): void {
 }
 
 async function fetchUser(accessToken: string): Promise<AuthUser> {
-  const response = await fetch(`${AUTH_BASE}/me`, {
+  const response = await fetchWithTimeout(`${AUTH_BASE}/me`, {
     headers: {
       Accept: 'application/json',
       Authorization: `Bearer ${accessToken}`,
@@ -96,7 +97,7 @@ async function fetchUser(accessToken: string): Promise<AuthUser> {
 
 async function refreshSession(session: AuthSession): Promise<AuthSession | null> {
   if (!session.refreshToken) return null;
-  const response = await fetch(`${AUTH_BASE}/refresh`, {
+  const response = await fetchWithTimeout(`${AUTH_BASE}/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -182,7 +183,7 @@ type Release = {
 };
 
 async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE}${path}`, {
     headers: { Accept: 'application/json' }
   });
 
@@ -193,6 +194,16 @@ async function fetchJson<T>(path: string): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 const fallbackProjects: Project[] = [

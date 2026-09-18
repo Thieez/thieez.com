@@ -52,9 +52,19 @@
   };
 
   onMount(async () => {
-    authSession = await restoreAuth();
-    authLoading = false;
+    const authTask = restoreAuth()
+      .then((session) => {
+        authSession = session;
+      })
+      .catch(() => {
+        authSession = null;
+      })
+      .finally(() => {
+        authLoading = false;
+      });
+
     await load();
+    await authTask;
   });
 
   const handleLogout = async () => {
