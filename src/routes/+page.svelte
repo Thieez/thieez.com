@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { onMount } from 'svelte';
-  import { getApkAsset, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, formatReleaseDate, API_BASE, logout, restoreAuth, startLogin, type AuthSession, type LatestBuild, type Project } from '$lib/api';
+  import { getApkAsset, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, formatReleaseDate, API_BASE, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type AuthSession, type LatestBuild, type Project } from '$lib/api';
 
   let isLisnnto = false;
   let isNote = false;
@@ -51,20 +51,31 @@
     loading = false;
   };
 
-  onMount(async () => {
-    const authTask = restoreAuth()
-      .then((session) => {
-        authSession = session;
-      })
-      .catch(() => {
-        authSession = null;
-      })
-      .finally(() => {
-        authLoading = false;
-      });
+  onMount(() => {
+    let unsubscribe: () => void = () => undefined;
+    void (async () => {
+      const authTask = restoreAuth()
+        .then((session) => {
+          authSession = session;
+        })
+        .catch(() => {
+          authSession = null;
+        })
+        .finally(() => {
+          authLoading = false;
+        });
 
-    await load();
-    await authTask;
+      await load();
+      await authTask;
+
+      if (!isLisnnto && !isNote) {
+        unsubscribe = subscribeToProjectUpdates(() => {
+          void load();
+        });
+      }
+    })();
+
+    return () => unsubscribe();
   });
 
   const handleLogout = async () => {

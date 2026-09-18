@@ -225,24 +225,37 @@ const fallbackProjects: Project[] = [
   }
 ];
 
-function ensureKnownProjects(projects: Project[]): Project[] {
-  const knownBySlug = new Map(projects.map((project) => [project.slug, project]));
-  for (const project of fallbackProjects) {
-    if (!knownBySlug.has(project.slug)) knownBySlug.set(project.slug, project);
-  }
-  return [...knownBySlug.values()];
-}
-
 export async function getProjects(): Promise<ProjectResult> {
   try {
     const payload = await fetchJson<Project[] | { projects?: Project[] }>('/projects/v0');
     const projects = Array.isArray(payload) ? payload : payload.projects ?? [];
-    return { projects: ensureKnownProjects(projects), source: 'api' };
+    return { projects, source: 'api' };
   } catch (cause) {
     const status = cause instanceof Error ? (cause as Error & { status?: number }).status : undefined;
     if (status !== 404 && status !== 405) throw cause;
     return { projects: fallbackProjects, source: 'fallback' };
   }
+}
+
+export function subscribeToProjectUpdates(onUpdate: () => void): () => void {
+  if (!isBrowser()) return () => undefined;
+
+  const websocketBase = API_BASE.replace(/^http/, 'ws');
+  const socket = new WebSocket(`${websocketBase}/projects/v0/updates`);
+  const handleMessage = (event: MessageEvent<string>) => {
+    try {
+      const message = JSON.parse(event.data) as { type?: string };
+      if (message.type === 'projects') onUpdate();
+    } catch {
+      // Ignore non-JSON keepalive messages.
+    }
+  };
+  socket.addEventListener('message', handleMessage);
+
+  return () => {
+    socket.removeEventListener('message', handleMessage);
+    socket.close();
+  };
 }
 
 function resolveAssetUrl(value?: string): string | undefined {
