@@ -195,42 +195,15 @@ async function fetchJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-const fallbackProjects: Project[] = [
-  {
-    slug: 'lisnnto',
-    name: 'Lisnnto',
-    description: 'A quieter way to keep up with the things worth hearing.',
-    href: 'https://lisnnto.thieez.com',
-    status: 'In testing',
-    meta: 'Android · latest build'
-  },
-  {
-    slug: 'note',
-    name: 'Note',
-    description: 'Thieez tools inside your Obsidian vault.',
-    href: 'https://note.thieez.com',
-    status: 'In testing',
-    meta: 'Obsidian · latest build'
-  }
-];
-
-function ensureKnownProjects(projects: Project[]): Project[] {
-  const knownBySlug = new Map(projects.map((project) => [project.slug, project]));
-  for (const project of fallbackProjects) {
-    if (!knownBySlug.has(project.slug)) knownBySlug.set(project.slug, project);
-  }
-  return [...knownBySlug.values()];
-}
-
 export async function getProjects(): Promise<ProjectResult> {
   try {
     const payload = await fetchJson<Project[] | { projects?: Project[] }>('/projects/v0');
     const projects = Array.isArray(payload) ? payload : payload.projects ?? [];
-    return { projects: ensureKnownProjects(projects), source: 'api' };
+    return { projects, source: 'api' };
   } catch (cause) {
     const status = cause instanceof Error ? (cause as Error & { status?: number }).status : undefined;
     if (status !== 404 && status !== 405) throw cause;
-    return { projects: fallbackProjects, source: 'fallback' };
+    return { projects: [], source: 'fallback' };
   }
 }
 
