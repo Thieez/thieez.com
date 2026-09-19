@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { onMount } from 'svelte';
-  import { getApkAsset, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, formatReleaseDate, API_BASE, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type AuthSession, type LatestBuild, type Project } from '$lib/api';
+  import { getApkAsset, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, formatReleaseDate, API_BASE, getLisnntoLimits, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type AuthSession, type LatestBuild, type LisnntoLimits, type Project } from '$lib/api';
 
   let isLisnnto = false;
   let isNote = false;
@@ -14,6 +14,11 @@
   let apiStatus: 'checking' | 'online' | 'degraded' | 'offline' = 'checking';
   let authSession: AuthSession | null = null;
   let authLoading = true;
+  let profileMenuOpen = false;
+  let accountOpen = false;
+  let limits: LisnntoLimits | null = null;
+  let limitsLoading = false;
+  let limitsError = '';
 
   const detectExperience = () => {
     if (!browser) return;
@@ -63,6 +68,8 @@
   };
 
   onMount(() => {
+    document.addEventListener('click', closeMenus);
+    document.addEventListener('keydown', handleDocumentKeydown);
     let unsubscribe: () => void = () => undefined;
     void (async () => {
       const authTask = restoreAuth()
@@ -86,13 +93,52 @@
       }
     })();
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      document.removeEventListener('click', closeMenus);
+      document.removeEventListener('keydown', handleDocumentKeydown);
+    };
   });
 
   const handleLogout = async () => {
+    profileMenuOpen = false;
+    accountOpen = false;
     await logout(authSession);
     authSession = null;
+    limits = null;
+    limitsError = '';
   };
+
+  const openAccount = async () => {
+    profileMenuOpen = false;
+    accountOpen = true;
+    if (!authSession || limits || limitsLoading) return;
+    limitsLoading = true;
+    limitsError = '';
+    try {
+      limits = await getLisnntoLimits(authSession.accessToken);
+    } catch (cause) {
+      limitsError = cause instanceof Error ? cause.message : 'Could not load Lisnnto limits.';
+    } finally {
+      limitsLoading = false;
+    }
+  };
+
+  const closeMenus = (event: MouseEvent) => {
+    if (event.target instanceof Element && event.target.closest('.profile-menu')) return;
+    profileMenuOpen = false;
+  };
+
+  const handleDocumentKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      profileMenuOpen = false;
+      accountOpen = false;
+    }
+  };
+
+  $: userLabel = authSession?.user?.name || authSession?.user?.email || 'Account';
+  $: userInitial = userLabel.trim().charAt(0).toUpperCase() || 'A';
+  $: avatarUrl = authSession?.user?.avatar_url;
 
   $: apk = build ? getApkAsset(build) : undefined;
   $: pluginZip = build && isNote ? getPluginZipAsset(build) : undefined;
@@ -119,8 +165,37 @@
     <div class="header-meta">
       {#if !authLoading}
         {#if authSession}
-          <span class="auth-user">{authSession.user?.name || authSession.user?.email || 'Account'}</span>
-          <button class="auth-button auth-button-muted" onclick={handleLogout}>Log out</button>
+          <div class="profile-menu">
+            <button
+              class="profile-button"
+              class:profile-button-open={profileMenuOpen}
+              aria-label={`Open profile menu for ${userLabel}`}
+              aria-expanded={profileMenuOpen}
+              onclick={(event) => { event.stopPropagation(); profileMenuOpen = !profileMenuOpen; }}
+            >
+              {#if avatarUrl}
+                <img src={avatarUrl} alt="" class="profile-avatar" />
+              {:else}
+                <span class="profile-avatar profile-avatar-fallback" aria-hidden="true">{userInitial}</span>
+              {/if}
+            </button>
+            {#if profileMenuOpen}
+              <div class="profile-dropdown">
+                <div class="profile-heading">
+                  <strong>{userLabel}</strong>
+                  {#if authSession.user?.email && authSession.user.email !== userLabel}
+                    <span>{authSession.user.email}</span>
+                  {/if}
+                </div>
+                <button class="profile-dropdown-item" onclick={openAccount}>
+                  <span>Account</span><span aria-hidden="true">↗</span>
+                </button>
+                <button class="profile-dropdown-item profile-dropdown-logout" onclick={handleLogout}>
+                  <span>Log out</span><span aria-hidden="true">↗</span>
+                </button>
+              </div>
+            {/if}
+          </div>
         {:else}
           <button class="auth-button" onclick={startLogin}>Log in with Google</button>
         {/if}
@@ -129,7 +204,39 @@
   </header>
 
   <main class="main-content">
-    {#if isLisnnto || isNote}
+    {#if accountOpen}
+      <section class="account-view" aria-labelledby="account-heading">
+        <div class="account-topline">
+          <p class="eyebrow">THIEEZ / ACCOUNT</p>
+          <button class="text-button" onclick={() => accountOpen = false}>Close <span aria-hidden="true">×</span></button>
+        </div>
+        <h1 id="account-heading">Your <em>account.</em></h1>
+        <p class="lede">Usage and storage limits for your Lisnnto account.</p>
+        {#if limitsLoading}
+          <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading Lisnnto limits…</span></div>
+        {:else if limitsError}
+          <div class="state-panel error-panel" role="alert">
+            <strong>Couldn’t load your limits.</strong>
+            <span>{limitsError}</span>
+            <button class="text-button" onclick={openAccount}>Try again <span aria-hidden="true">↗</span></button>
+          </div>
+        {:else if limits}
+          <div class="limits-grid">
+            <div class="limit-card">
+              <span class="limit-label">Saved tracks</span>
+              <strong>{limits.tracks_count} <small>/ {limits.tracks_limit}</small></strong>
+              <span class="limit-progress"><span style={`width: ${Math.min(100, (limits.tracks_count / Math.max(1, limits.tracks_limit)) * 100)}%`}></span></span>
+            </div>
+            <div class="limit-card">
+              <span class="limit-label">Playlists</span>
+              <strong>{limits.playlists_count} <small>/ {limits.playlists_limit}</small></strong>
+              <span class="limit-progress"><span style={`width: ${Math.min(100, (limits.playlists_count / Math.max(1, limits.playlists_limit)) * 100)}%`}></span></span>
+            </div>
+          </div>
+          <p class="limits-note">Limits adjust automatically as shared Lisnnto storage fills up.</p>
+        {/if}
+      </section>
+    {:else if isLisnnto || isNote}
       <section class="hero download-hero" aria-labelledby="download-heading">
         <p class="eyebrow">THIEEZ / {isNote ? 'NOTE' : 'LISNNTO'}</p>
         <h1 id="download-heading">The latest build,<br /><em>ready when you are.</em></h1>

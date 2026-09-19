@@ -21,6 +21,16 @@ export type AuthSession = {
   user: AuthUser | null;
 };
 
+export type LisnntoLimits = {
+  tracks_count: number;
+  tracks_limit: number;
+  playlists_count: number;
+  playlists_limit: number;
+  database_size_bytes?: number;
+  database_quota_bytes?: number;
+  database_usage_ratio?: number;
+};
+
 export type ApiAsset = {
   name: string;
   browser_download_url?: string;
@@ -174,6 +184,19 @@ export async function logout(session: AuthSession | null): Promise<void> {
     }).catch(() => undefined);
   }
   writeSession(null);
+}
+
+export async function getLisnntoLimits(accessToken: string): Promise<LisnntoLimits> {
+  const response = await fetchWithTimeout(`${API_BASE}/lisnnto/v0/limits`, {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+  if (!response.ok) {
+    throw new Error(`Could not load Lisnnto limits (${response.status})`);
+  }
+  return response.json() as Promise<LisnntoLimits>;
 }
 
 type Release = {
