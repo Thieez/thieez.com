@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { onMount } from 'svelte';
-  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, getLisnntoLimits, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type AuthSession, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits } from '$lib/api';
+  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, getLisnntoLimits, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type AuthSession, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
 
   let isLisnnto = false;
   let isNote = false;
@@ -181,6 +181,60 @@
 
   const renderDataText = (data: Record<string, unknown> | undefined): string =>
     data ? JSON.stringify(data, null, 2) : 'No data returned by Render.';
+
+  type ChartPoint = { timestamp: string; value: number };
+  type RenderMetricName = 'cpu' | 'cpu_limit' | 'memory' | 'memory_limit' | 'bandwidth' | 'http_requests' | 'http_latency' | 'disk_usage' | 'disk_capacity' | 'active_connections';
+  const metricDefinitions: Array<{ name: RenderMetricName; label: string; limit?: RenderMetricName; aggregate: 'average' | 'sum' }> = [
+    { name: 'cpu', label: 'CPU utilization', limit: 'cpu_limit', aggregate: 'average' },
+    { name: 'memory', label: 'Memory utilization', limit: 'memory_limit', aggregate: 'average' },
+    { name: 'bandwidth', label: 'Outbound bandwidth', aggregate: 'sum' },
+    { name: 'http_requests', label: 'HTTP requests', aggregate: 'sum' },
+    { name: 'http_latency', label: 'HTTP latency', aggregate: 'average' },
+    { name: 'disk_usage', label: 'Disk usage', limit: 'disk_capacity', aggregate: 'average' },
+    { name: 'active_connections', label: 'Active connections', aggregate: 'average' }
+  ];
+
+  const seriesFor = (series: RenderMetricSeries[] | undefined, aggregate: 'average' | 'sum'): ChartPoint[] => {
+    const buckets = new Map<string, number[]>();
+    for (const item of series ?? []) {
+      for (const point of item.values ?? []) {
+        if (!point.timestamp || typeof point.value !== 'number' || !Number.isFinite(point.value)) continue;
+        const values = buckets.get(point.timestamp) ?? [];
+        values.push(point.value);
+        buckets.set(point.timestamp, values);
+      }
+    }
+    return [...buckets.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([timestamp, values]) => ({
+        timestamp,
+        value: aggregate === 'sum'
+          ? values.reduce((total, value) => total + value, 0)
+          : values.reduce((total, value) => total + value, 0) / values.length
+      }));
+  };
+
+  const latestValue = (points: ChartPoint[]): number | undefined => points.at(-1)?.value;
+  const metricUnit = (series: RenderMetricSeries[] | undefined): string => series?.find((item) => item.unit)?.unit ?? '';
+  const formatMetricValue = (value: number | undefined, unit: string): string => {
+    if (value === undefined) return '—';
+    if (unit === 'bytes') return formatBytes(value);
+    if (unit === 'percent') return `${value.toFixed(1)}%`;
+    if (unit === 'seconds') return `${value.toFixed(2)} s`;
+    if (Math.abs(value) >= 1000) return value.toLocaleString('en-US', { maximumFractionDigits: 1 });
+    if (Math.abs(value) < 1) return value.toFixed(3);
+    return value.toFixed(1);
+  };
+  const chartPath = (points: ChartPoint[], max: number): string => {
+    if (!points.length) return '';
+    return points.map((point, index) => {
+      const x = points.length === 1 ? 0 : index / (points.length - 1) * 100;
+      const y = 38 - Math.min(1, Math.max(0, point.value / max)) * 34;
+      return `${index ? 'L' : 'M'}${x.toFixed(2)} ${y.toFixed(2)}`;
+    }).join(' ');
+  };
+  const metricPoints = (name: RenderMetricName, aggregate: 'average' | 'sum'): ChartPoint[] =>
+    seriesFor(renderLimits?.metric_series?.[name], aggregate);
 </script>
 
 <svelte:head>
@@ -362,7 +416,46 @@
           <div class="state-panel error-panel" role="alert"><strong>Render plan is unavailable.</strong><span>{renderLimitsError}</span></div>
         {:else if renderLimits}
           <div class="storage-card">
-            <pre class="render-raw-data">{renderDataText(renderLimits.render_data)}</pre>
+            <div class="render-summary">
+              <div><span>Service</span><strong>{renderLimits.service_name}</strong></div>
+              <div><span>Plan</span><strong>{renderLimits.plan}</strong></div>
+              <div><span>Region</span><strong>{renderLimits.region || '—'}</strong></div>
+              <div><span>Status</span><strong>{renderLimits.status || '—'}</strong></div>
+            </div>
+            <div class="render-metric-grid">
+              {#each metricDefinitions as definition}
+                {@const points = metricPoints(definition.name, definition.aggregate)}
+                {@const limitPoints = definition.limit ? metricPoints(definition.limit, 'average') : []}
+                {@const current = latestValue(points)}
+                {@const limit = latestValue(limitPoints)}
+                {@const unit = metricUnit(renderLimits.metric_series?.[definition.name])}
+                {@const chartMax = Math.max(...points.map((point) => point.value), ...(limit !== undefined ? [limit] : []), 1)}
+                <article class="render-metric">
+                  <div class="render-metric-heading">
+                    <span>{definition.label}</span>
+                    <strong>{formatMetricValue(current, unit)}</strong>
+                  </div>
+                  {#if limit !== undefined}
+                    <div class="metric-bar" role="progressbar" aria-label={`${definition.label} usage`} aria-valuemin="0" aria-valuemax={limit} aria-valuenow={current ?? 0}>
+                      <span style={`width: ${Math.min(100, Math.max(0, (current ?? 0) / Math.max(limit, 0.000001) * 100))}%`}></span>
+                    </div>
+                    <small>{formatMetricValue(limit, metricUnit(renderLimits.metric_series?.[definition.limit!]))} limit</small>
+                  {/if}
+                  {#if points.length}
+                    <svg class="metric-chart" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`${definition.label} over time`}>
+                      <path d={chartPath(points, chartMax)} />
+                    </svg>
+                    <small>{points.length} points · {points[0].timestamp} — {points.at(-1)?.timestamp}</small>
+                  {:else}
+                    <small>No data returned by Render</small>
+                  {/if}
+                </article>
+              {/each}
+            </div>
+            <details class="render-raw-details">
+              <summary>Raw Render response</summary>
+              <pre class="render-raw-data">{renderDataText(renderLimits.render_data)}</pre>
+            </details>
           </div>
         {/if}
       </section>

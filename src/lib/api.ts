@@ -59,6 +59,12 @@ export type DatabaseStorage = {
   usage_ratio: number;
 };
 
+export type RenderMetricSeries = {
+  labels?: Array<{ field?: string; value?: string }>;
+  unit?: string;
+  values?: Array<{ timestamp?: string; value?: number }>;
+};
+
 export type RenderLimits = {
   service_name: string;
   service_type?: string;
@@ -84,7 +90,7 @@ export type RenderLimits = {
     name?: string;
   };
   metrics?: Record<string, { value: number; timestamp?: string; unit?: string } | null>;
-  metric_series?: Record<string, Array<{ timestamp?: string; value: number }>>;
+  metric_series?: Record<string, RenderMetricSeries[]>;
   metrics_window?: {
     start: string;
     end: string;
