@@ -70,6 +70,37 @@ export type RenderLimits = {
     memory_mb?: number;
     disk_gb?: number;
   };
+  status?: string;
+  runtime?: string;
+  build_plan?: string;
+  auto_deploy?: string | boolean;
+  url?: string;
+  health_check_path?: string;
+  updated_at?: string;
+  created_at?: string;
+  disk: {
+    size_gb?: number;
+    mount_path?: string;
+    name?: string;
+  };
+  metrics: Record<string, { value: number; timestamp?: string; unit?: string } | null>;
+  metrics_window?: {
+    start: string;
+    end: string;
+    resolution_seconds: number;
+  };
+  metric_errors?: Record<string, string>;
+  latest_deploy?: {
+    id?: string;
+    status?: string;
+    createdAt?: string;
+    finishedAt?: string;
+    commit?: { id?: string; message?: string };
+  } | null;
+  instances: Array<{
+    id?: string;
+    createdAt?: string;
+  }>;
 };
 
 export type LatestBuild = {

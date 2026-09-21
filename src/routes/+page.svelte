@@ -178,6 +178,13 @@
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
+
+  const formatMetric = (metric: { value: number; unit?: string } | null | undefined): string => {
+    if (!metric) return '—';
+    const value = Number(metric.value);
+    if (!Number.isFinite(value)) return '—';
+    return `${value >= 100 ? Math.round(value) : value.toFixed(1)}${metric.unit ? ` ${metric.unit}` : ''}`;
+  };
 </script>
 
 <svelte:head>
@@ -371,9 +378,22 @@
                 <div><span>Disk</span><strong>{renderLimits.limits.disk_gb} GB</strong></div>
               {/if}
             </div>
-            {#if renderLimits.region || renderLimits.instance_count !== undefined}
-              <p>{renderLimits.service_name}{renderLimits.region ? ` · ${renderLimits.region}` : ''}{renderLimits.instance_count !== undefined ? ` · ${renderLimits.instance_count} instance${renderLimits.instance_count === 1 ? '' : 's'}` : ''}</p>
-            {/if}
+            <div class="render-details">
+              <span>Status: {renderLimits.status || '—'}</span>
+              <span>CPU now: {formatMetric(renderLimits.metrics.cpu)}</span>
+              <span>CPU limit: {formatMetric(renderLimits.metrics.cpu_limit)}</span>
+              <span>Memory now: {formatMetric(renderLimits.metrics.memory)}</span>
+              <span>Memory limit: {formatMetric(renderLimits.metrics.memory_limit)}</span>
+              <span>Instances: {formatMetric(renderLimits.metrics.instance_count)}</span>
+              <span>HTTP requests: {formatMetric(renderLimits.metrics.http_requests)}</span>
+              <span>HTTP latency: {formatMetric(renderLimits.metrics.http_latency)}</span>
+              <span>Bandwidth: {formatMetric(renderLimits.metrics.bandwidth)}</span>
+              <span>Disk used: {formatMetric(renderLimits.metrics.disk_usage)}</span>
+              <span>Disk capacity: {formatMetric(renderLimits.metrics.disk_capacity)}</span>
+              <span>Active connections: {formatMetric(renderLimits.metrics.active_connections)}</span>
+              <span>Running instances: {renderLimits.instances.length}</span>
+            </div>
+            <p>{renderLimits.service_name}{renderLimits.runtime ? ` · ${renderLimits.runtime}` : ''}{renderLimits.region ? ` · ${renderLimits.region}` : ''}{renderLimits.latest_deploy?.status ? ` · deploy ${renderLimits.latest_deploy.status}` : ''}</p>
           </div>
         {/if}
       </section>
