@@ -378,7 +378,7 @@
               <span>CPU limit: {formatMetric(renderLimits.metrics?.cpu_limit)}</span>
               <span>Memory now: {formatMetric(renderLimits.metrics?.memory)}</span>
               <span>Memory limit: {formatMetric(renderLimits.metrics?.memory_limit)}</span>
-              <span>Instances: {formatMetric(renderLimits.metrics?.instance_count)}</span>
+              <span>Instances: {renderLimits.instance_count ?? '—'}</span>
               <span>HTTP requests: {formatMetric(renderLimits.metrics?.http_requests)}</span>
               <span>HTTP latency: {formatMetric(renderLimits.metrics?.http_latency)}</span>
               <span>Bandwidth: {formatMetric(renderLimits.metrics?.bandwidth)}</span>
