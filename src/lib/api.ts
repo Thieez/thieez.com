@@ -84,6 +84,7 @@ export type RenderLimits = {
     name?: string;
   };
   metrics?: Record<string, { value: number; timestamp?: string; unit?: string } | null>;
+  metric_series?: Record<string, Array<{ timestamp?: string; value: number }>>;
   metrics_window?: {
     start: string;
     end: string;

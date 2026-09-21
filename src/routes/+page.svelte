@@ -185,6 +185,18 @@
     if (!Number.isFinite(value)) return '—';
     return `${value >= 100 ? Math.round(value) : value.toFixed(1)}${metric.unit ? ` ${metric.unit}` : ''}`;
   };
+
+  const metricPath = (points: Array<{ value: number }> | undefined): string => {
+    if (!points?.length) return '';
+    const values = points.map((point) => Number(point.value)).filter(Number.isFinite);
+    if (!values.length) return '';
+    const max = Math.max(...values, 1);
+    return values.map((value, index) => {
+      const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 100;
+      const y = 36 - (value / max) * 32;
+      return `${index ? 'L' : 'M'} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    }).join(' ');
+  };
 </script>
 
 <svelte:head>
@@ -386,6 +398,21 @@
               <span>Disk capacity: {formatMetric(renderLimits.metrics?.disk_capacity)}</span>
               <span>Active connections: {formatMetric(renderLimits.metrics?.active_connections)}</span>
               <span>Running instances: {renderLimits.instances.length}</span>
+            </div>
+            <div class="metric-charts">
+              {#each [['cpu', 'CPU utilization'], ['memory', 'Memory utilization'], ['bandwidth', 'Outbound bandwidth']] as chart}
+                {@const points = renderLimits.metric_series?.[chart[0]]}
+                <div class="metric-chart">
+                  <span>{chart[1]}</span>
+                  {#if points?.length}
+                    <svg viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`${chart[1]} over the last 48 hours`}>
+                      <path d={metricPath(points)} />
+                    </svg>
+                  {:else}
+                    <small>No data returned by Render</small>
+                  {/if}
+                </div>
+              {/each}
             </div>
             <p>{renderLimits.service_name}{renderLimits.runtime ? ` · ${renderLimits.runtime}` : ''}{renderLimits.region ? ` · ${renderLimits.region}` : ''}{renderLimits.latest_deploy?.status ? ` · deploy ${renderLimits.latest_deploy.status}` : ''}</p>
           </div>
