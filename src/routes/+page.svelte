@@ -179,24 +179,8 @@
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
-  const formatMetric = (metric: { value: number; unit?: string } | null | undefined): string => {
-    if (!metric) return '—';
-    const value = Number(metric.value);
-    if (!Number.isFinite(value)) return '—';
-    return `${value >= 100 ? Math.round(value) : value.toFixed(1)}${metric.unit ? ` ${metric.unit}` : ''}`;
-  };
-
-  const metricPath = (points: Array<{ value: number }> | undefined): string => {
-    if (!points?.length) return '';
-    const values = points.map((point) => Number(point.value)).filter(Number.isFinite);
-    if (!values.length) return '';
-    const max = Math.max(...values, 1);
-    return values.map((value, index) => {
-      const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 100;
-      const y = 36 - (value / max) * 32;
-      return `${index ? 'L' : 'M'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    }).join(' ');
-  };
+  const renderDataText = (data: Record<string, unknown> | undefined): string =>
+    data ? JSON.stringify(data, null, 2) : 'No data returned by Render.';
 </script>
 
 <svelte:head>
@@ -378,43 +362,7 @@
           <div class="state-panel error-panel" role="alert"><strong>Render plan is unavailable.</strong><span>{renderLimitsError}</span></div>
         {:else if renderLimits}
           <div class="storage-card">
-            <div class="storage-values render-values">
-              <div><span>Plan</span><strong>{renderLimits.plan}</strong></div>
-              <div><span>CPU</span><strong>{renderLimits.limits.cpu_cores != null ? `${renderLimits.limits.cpu_cores} core` : '—'}</strong></div>
-              <div><span>Memory</span><strong>{renderLimits.limits.memory_mb != null ? `${renderLimits.limits.memory_mb} MB` : '—'}</strong></div>
-              <div><span>Disk</span><strong>{renderLimits.limits.disk_gb != null ? `${renderLimits.limits.disk_gb} GB` : '—'}</strong></div>
-            </div>
-            <div class="render-details">
-              <span>Status: {renderLimits.status || '—'}</span>
-              <span>CPU now: {formatMetric(renderLimits.metrics?.cpu)}</span>
-              <span>CPU limit: {formatMetric(renderLimits.metrics?.cpu_limit)}</span>
-              <span>Memory now: {formatMetric(renderLimits.metrics?.memory)}</span>
-              <span>Memory limit: {formatMetric(renderLimits.metrics?.memory_limit)}</span>
-              <span>Instances: {renderLimits.instance_count ?? '—'}</span>
-              <span>HTTP requests: {formatMetric(renderLimits.metrics?.http_requests)}</span>
-              <span>HTTP latency: {formatMetric(renderLimits.metrics?.http_latency)}</span>
-              <span>Bandwidth: {formatMetric(renderLimits.metrics?.bandwidth)}</span>
-              <span>Disk used: {formatMetric(renderLimits.metrics?.disk_usage)}</span>
-              <span>Disk capacity: {formatMetric(renderLimits.metrics?.disk_capacity)}</span>
-              <span>Active connections: {formatMetric(renderLimits.metrics?.active_connections)}</span>
-              <span>Running instances: {renderLimits.instances.length}</span>
-            </div>
-            <div class="metric-charts">
-              {#each [['cpu', 'CPU utilization'], ['memory', 'Memory utilization'], ['bandwidth', 'Outbound bandwidth']] as chart}
-                {@const points = renderLimits.metric_series?.[chart[0]]}
-                <div class="metric-chart">
-                  <span>{chart[1]}</span>
-                  {#if points?.length}
-                    <svg viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`${chart[1]} over the last 48 hours`}>
-                      <path d={metricPath(points)} />
-                    </svg>
-                  {:else}
-                    <small>No data returned by Render</small>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-            <p>{renderLimits.service_name}{renderLimits.runtime ? ` · ${renderLimits.runtime}` : ''}{renderLimits.region ? ` · ${renderLimits.region}` : ''}{renderLimits.latest_deploy?.status ? ` · deploy ${renderLimits.latest_deploy.status}` : ''}</p>
+            <pre class="render-raw-data">{renderDataText(renderLimits.render_data)}</pre>
           </div>
         {/if}
       </section>

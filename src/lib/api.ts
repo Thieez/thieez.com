@@ -102,6 +102,7 @@ export type RenderLimits = {
     id?: string;
     createdAt?: string;
   }>;
+  render_data?: Record<string, unknown>;
 };
 
 export type LatestBuild = {
