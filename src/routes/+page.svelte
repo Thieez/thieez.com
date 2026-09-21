@@ -380,17 +380,17 @@
             </div>
             <div class="render-details">
               <span>Status: {renderLimits.status || '—'}</span>
-              <span>CPU now: {formatMetric(renderLimits.metrics.cpu)}</span>
-              <span>CPU limit: {formatMetric(renderLimits.metrics.cpu_limit)}</span>
-              <span>Memory now: {formatMetric(renderLimits.metrics.memory)}</span>
-              <span>Memory limit: {formatMetric(renderLimits.metrics.memory_limit)}</span>
-              <span>Instances: {formatMetric(renderLimits.metrics.instance_count)}</span>
-              <span>HTTP requests: {formatMetric(renderLimits.metrics.http_requests)}</span>
-              <span>HTTP latency: {formatMetric(renderLimits.metrics.http_latency)}</span>
-              <span>Bandwidth: {formatMetric(renderLimits.metrics.bandwidth)}</span>
-              <span>Disk used: {formatMetric(renderLimits.metrics.disk_usage)}</span>
-              <span>Disk capacity: {formatMetric(renderLimits.metrics.disk_capacity)}</span>
-              <span>Active connections: {formatMetric(renderLimits.metrics.active_connections)}</span>
+              <span>CPU now: {formatMetric(renderLimits.metrics?.cpu)}</span>
+              <span>CPU limit: {formatMetric(renderLimits.metrics?.cpu_limit)}</span>
+              <span>Memory now: {formatMetric(renderLimits.metrics?.memory)}</span>
+              <span>Memory limit: {formatMetric(renderLimits.metrics?.memory_limit)}</span>
+              <span>Instances: {formatMetric(renderLimits.metrics?.instance_count)}</span>
+              <span>HTTP requests: {formatMetric(renderLimits.metrics?.http_requests)}</span>
+              <span>HTTP latency: {formatMetric(renderLimits.metrics?.http_latency)}</span>
+              <span>Bandwidth: {formatMetric(renderLimits.metrics?.bandwidth)}</span>
+              <span>Disk used: {formatMetric(renderLimits.metrics?.disk_usage)}</span>
+              <span>Disk capacity: {formatMetric(renderLimits.metrics?.disk_capacity)}</span>
+              <span>Active connections: {formatMetric(renderLimits.metrics?.active_connections)}</span>
               <span>Running instances: {renderLimits.instances.length}</span>
             </div>
             <p>{renderLimits.service_name}{renderLimits.runtime ? ` · ${renderLimits.runtime}` : ''}{renderLimits.region ? ` · ${renderLimits.region}` : ''}{renderLimits.latest_deploy?.status ? ` · deploy ${renderLimits.latest_deploy.status}` : ''}</p>

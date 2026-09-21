@@ -83,7 +83,7 @@ export type RenderLimits = {
     mount_path?: string;
     name?: string;
   };
-  metrics: Record<string, { value: number; timestamp?: string; unit?: string } | null>;
+  metrics?: Record<string, { value: number; timestamp?: string; unit?: string } | null>;
   metrics_window?: {
     start: string;
     end: string;
