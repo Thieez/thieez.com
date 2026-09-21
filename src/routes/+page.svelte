@@ -179,9 +179,6 @@
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
-  const renderDataText = (data: Record<string, unknown> | undefined): string =>
-    data ? JSON.stringify(data, null, 2) : 'No data returned by Render.';
-
   type ChartPoint = { timestamp: string; value: number };
   type RenderMetricName = 'cpu' | 'cpu_limit' | 'memory' | 'memory_limit' | 'bandwidth' | 'http_requests' | 'http_latency' | 'disk_usage' | 'disk_capacity' | 'active_connections';
   const metricDefinitions: Array<{ name: RenderMetricName; label: string; limit?: RenderMetricName; aggregate: 'average' | 'sum' }> = [
@@ -235,6 +232,9 @@
   };
   const metricPoints = (name: RenderMetricName, aggregate: 'average' | 'sum'): ChartPoint[] =>
     seriesFor(renderLimits?.metric_series?.[name], aggregate);
+
+  const availableMetricDefinitions = (): typeof metricDefinitions =>
+    metricDefinitions.filter((definition) => metricPoints(definition.name, definition.aggregate).length > 0);
 </script>
 
 <svelte:head>
@@ -423,7 +423,7 @@
               <div><span>Status</span><strong>{renderLimits.status || '—'}</strong></div>
             </div>
             <div class="render-metric-grid">
-              {#each metricDefinitions as definition}
+              {#each availableMetricDefinitions() as definition}
                 {@const points = metricPoints(definition.name, definition.aggregate)}
                 {@const limitPoints = definition.limit ? metricPoints(definition.limit, 'average') : []}
                 {@const current = latestValue(points)}
@@ -446,16 +446,10 @@
                       <path d={chartPath(points, chartMax)} />
                     </svg>
                     <small>{points.length} points · {points[0].timestamp} — {points.at(-1)?.timestamp}</small>
-                  {:else}
-                    <small>No data returned by Render</small>
                   {/if}
                 </article>
               {/each}
             </div>
-            <details class="render-raw-details">
-              <summary>Raw Render response</summary>
-              <pre class="render-raw-data">{renderDataText(renderLimits.render_data)}</pre>
-            </details>
           </div>
         {/if}
       </section>
