@@ -39,6 +39,7 @@ h1 em{font-style:normal;color:#8d8a82}
 .lede{font-size:17px;line-height:1.5;max-width:450px;color:#4e4b45;margin:37px 0 0}
 .project-section{padding-bottom:110px}
 .storage-section{padding-bottom:78px}
+.render-section{padding-bottom:78px}
 .section-heading{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--ink);padding-bottom:14px;margin-bottom:0}
 .section-heading h2{font-size:15px;letter-spacing:-.02em;margin:0}
 .section-heading span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
@@ -80,6 +81,7 @@ h1 em{font-style:normal;color:#8d8a82}
 .storage-progress{height:6px;margin-top:28px;background:var(--line);overflow:hidden}
 .storage-progress span{display:block;height:100%;background:var(--lime)}
 .storage-card p{margin:14px 0 0;text-transform:none;letter-spacing:0}
+.render-values strong{font-size:28px}
 .download-hero .lede{max-width:510px}
 .release-card{border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);margin-top:58px;padding:16px 0 24px}
 .release-topline{display:flex;align-items:center;gap:12px;font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:10px;letter-spacing:.06em}

@@ -59,6 +59,19 @@ export type DatabaseStorage = {
   usage_ratio: number;
 };
 
+export type RenderLimits = {
+  service_name: string;
+  service_type?: string;
+  plan: string;
+  region?: string;
+  instance_count?: number;
+  limits: {
+    cpu_cores?: number;
+    memory_mb?: number;
+    disk_gb?: number;
+  };
+};
+
 export type LatestBuild = {
   tag_name?: string;
   published_at?: string;
@@ -249,6 +262,10 @@ export async function getProjects(): Promise<ProjectResult> {
 
 export async function getDatabaseStorage(): Promise<DatabaseStorage> {
   return fetchJson<DatabaseStorage>('/lisnnto/v0/storage');
+}
+
+export async function getRenderLimits(): Promise<RenderLimits> {
+  return fetchJson<RenderLimits>('/render/v0/limits');
 }
 
 export function subscribeToProjectUpdates(onUpdate: () => void): () => void {

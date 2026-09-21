@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { onMount } from 'svelte';
-  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, formatReleaseDate, API_BASE, getLisnntoLimits, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type AuthSession, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project } from '$lib/api';
+  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, getLisnntoLimits, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type AuthSession, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits } from '$lib/api';
 
   let isLisnnto = false;
   let isNote = false;
@@ -22,6 +22,9 @@
   let storage: DatabaseStorage | null = null;
   let storageLoading = false;
   let storageError = '';
+  let renderLimits: RenderLimits | null = null;
+  let renderLimitsLoading = false;
+  let renderLimitsError = '';
 
   const detectExperience = () => {
     if (!browser) return;
@@ -59,6 +62,8 @@
     } else {
       storageLoading = true;
       storageError = '';
+      renderLimitsLoading = true;
+      renderLimitsError = '';
       void getDatabaseStorage()
         .then((result) => {
           storage = result;
@@ -68,6 +73,16 @@
         })
         .finally(() => {
           storageLoading = false;
+        });
+      void getRenderLimits()
+        .then((result) => {
+          renderLimits = result;
+        })
+        .catch((cause) => {
+          renderLimitsError = cause instanceof Error ? cause.message : 'Render limits could not be loaded.';
+        })
+        .finally(() => {
+          renderLimitsLoading = false;
         });
       try {
         const result = await getProjects();
@@ -329,6 +344,36 @@
               <span style={`width: ${Math.min(100, storage.usage_ratio * 100)}%`}></span>
             </div>
             <p>{Math.round(storage.usage_ratio * 100)}% of the configured database quota is currently used.</p>
+          </div>
+        {/if}
+      </section>
+
+      <section class="render-section" aria-labelledby="render-heading">
+        <div class="section-heading">
+          <h2 id="render-heading">API hosting</h2>
+          <span>RENDER.COM / PLAN</span>
+        </div>
+        {#if renderLimitsLoading}
+          <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking Render plan limits…</span></div>
+        {:else if renderLimitsError}
+          <div class="state-panel error-panel" role="alert"><strong>Render plan is unavailable.</strong><span>{renderLimitsError}</span></div>
+        {:else if renderLimits}
+          <div class="storage-card">
+            <div class="storage-values render-values">
+              <div><span>Plan</span><strong>{renderLimits.plan}</strong></div>
+              {#if renderLimits.limits.cpu_cores !== undefined}
+                <div><span>CPU</span><strong>{renderLimits.limits.cpu_cores} core</strong></div>
+              {/if}
+              {#if renderLimits.limits.memory_mb !== undefined}
+                <div><span>Memory</span><strong>{renderLimits.limits.memory_mb} MB</strong></div>
+              {/if}
+              {#if renderLimits.limits.disk_gb !== undefined}
+                <div><span>Disk</span><strong>{renderLimits.limits.disk_gb} GB</strong></div>
+              {/if}
+            </div>
+            {#if renderLimits.region || renderLimits.instance_count !== undefined}
+              <p>{renderLimits.service_name}{renderLimits.region ? ` · ${renderLimits.region}` : ''}{renderLimits.instance_count !== undefined ? ` · ${renderLimits.instance_count} instance${renderLimits.instance_count === 1 ? '' : 's'}` : ''}</p>
+            {/if}
           </div>
         {/if}
       </section>
