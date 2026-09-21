@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { onMount } from 'svelte';
-  import { getApkAsset, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, formatReleaseDate, API_BASE, getLisnntoLimits, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type AuthSession, type LatestBuild, type LisnntoLimits, type Project } from '$lib/api';
+  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, formatReleaseDate, API_BASE, getLisnntoLimits, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type AuthSession, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project } from '$lib/api';
 
   let isLisnnto = false;
   let isNote = false;
@@ -19,6 +19,9 @@
   let limits: LisnntoLimits | null = null;
   let limitsLoading = false;
   let limitsError = '';
+  let storage: DatabaseStorage | null = null;
+  let storageLoading = false;
+  let storageError = '';
 
   const detectExperience = () => {
     if (!browser) return;
@@ -54,6 +57,18 @@
         error = cause instanceof Error ? cause.message : 'The latest build could not be loaded.';
       }
     } else {
+      storageLoading = true;
+      storageError = '';
+      void getDatabaseStorage()
+        .then((result) => {
+          storage = result;
+        })
+        .catch((cause) => {
+          storageError = cause instanceof Error ? cause.message : 'Database storage could not be loaded.';
+        })
+        .finally(() => {
+          storageLoading = false;
+        });
       try {
         const result = await getProjects();
         projects = result.projects;
@@ -142,6 +157,12 @@
 
   $: apk = build ? getApkAsset(build) : undefined;
   $: pluginZip = build && isNote ? getPluginZipAsset(build) : undefined;
+
+  const formatBytes = (bytes: number): string => {
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
 </script>
 
 <svelte:head>
@@ -286,6 +307,30 @@
         <p class="eyebrow">PROJECT INDEX</p>
         <h1 id="index-heading">Things we’re<br /><em>building.</em></h1>
         <p class="lede">Small software experiments, shipped carefully. A living index of what’s on our workbench.</p>
+      </section>
+
+      <section class="storage-section" aria-labelledby="storage-heading">
+        <div class="section-heading">
+          <h2 id="storage-heading">Database storage</h2>
+          <span>SUPABASE / LIVE</span>
+        </div>
+        {#if storageLoading}
+          <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking database capacity…</span></div>
+        {:else if storageError}
+          <div class="state-panel error-panel" role="alert"><strong>Storage status is unavailable.</strong><span>{storageError}</span></div>
+        {:else if storage}
+          <div class="storage-card">
+            <div class="storage-values">
+              <div><span>Used</span><strong>{formatBytes(storage.used_bytes)}</strong></div>
+              <div><span>Available</span><strong>{formatBytes(storage.available_bytes)}</strong></div>
+              <div><span>Total</span><strong>{formatBytes(storage.quota_bytes)}</strong></div>
+            </div>
+            <div class="storage-progress" role="progressbar" aria-label="Database storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(storage.usage_ratio * 100)}>
+              <span style={`width: ${Math.min(100, storage.usage_ratio * 100)}%`}></span>
+            </div>
+            <p>{Math.round(storage.usage_ratio * 100)}% of the configured database quota is currently used.</p>
+          </div>
+        {/if}
       </section>
 
       <section class="project-section" aria-labelledby="projects-heading">

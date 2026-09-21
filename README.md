@@ -23,6 +23,8 @@ relative path.
 
 The homepage subscribes to `wss://api.thieez.com/projects/v0/updates` and
 refreshes the list after a signed GitHub `Repository` webhook event.
+It also displays live Supabase database usage from the public
+`/lisnnto/v0/storage` endpoint.
 
 The header also supports Google login through the same OAuth flow as the
 Obsidian plugin (`/auth/v0/login`). The returned access and refresh tokens are

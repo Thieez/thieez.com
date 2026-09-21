@@ -52,6 +52,13 @@ export type ProjectResult = {
   source: 'api' | 'fallback';
 };
 
+export type DatabaseStorage = {
+  used_bytes: number;
+  available_bytes: number;
+  quota_bytes: number;
+  usage_ratio: number;
+};
+
 export type LatestBuild = {
   tag_name?: string;
   published_at?: string;
@@ -238,6 +245,10 @@ export async function getProjects(): Promise<ProjectResult> {
     if (status !== 404 && status !== 405) throw cause;
     return { projects: [], source: 'fallback' };
   }
+}
+
+export async function getDatabaseStorage(): Promise<DatabaseStorage> {
+  return fetchJson<DatabaseStorage>('/lisnnto/v0/storage');
 }
 
 export function subscribeToProjectUpdates(onUpdate: () => void): () => void {
