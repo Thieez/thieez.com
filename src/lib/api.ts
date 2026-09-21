@@ -66,9 +66,9 @@ export type RenderLimits = {
   region?: string;
   instance_count?: number;
   limits: {
-    cpu_cores?: number;
-    memory_mb?: number;
-    disk_gb?: number;
+    cpu_cores?: number | null;
+    memory_mb?: number | null;
+    disk_gb?: number | null;
   };
   status?: string;
   runtime?: string;
@@ -296,7 +296,13 @@ export async function getDatabaseStorage(): Promise<DatabaseStorage> {
 }
 
 export async function getRenderLimits(): Promise<RenderLimits> {
-  return fetchJson<RenderLimits>('/render/v0/limits');
+  try {
+    return await fetchJson<RenderLimits>('/render/v0/limits');
+  } catch (cause) {
+    const status = cause instanceof Error ? (cause as Error & { status?: number }).status : undefined;
+    if (status !== 404 && status !== 405) throw cause;
+    return fetchJson<RenderLimits>('/render/limits');
+  }
 }
 
 export function subscribeToProjectUpdates(onUpdate: () => void): () => void {

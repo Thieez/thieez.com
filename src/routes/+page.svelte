@@ -368,15 +368,9 @@
           <div class="storage-card">
             <div class="storage-values render-values">
               <div><span>Plan</span><strong>{renderLimits.plan}</strong></div>
-              {#if renderLimits.limits.cpu_cores !== undefined}
-                <div><span>CPU</span><strong>{renderLimits.limits.cpu_cores} core</strong></div>
-              {/if}
-              {#if renderLimits.limits.memory_mb !== undefined}
-                <div><span>Memory</span><strong>{renderLimits.limits.memory_mb} MB</strong></div>
-              {/if}
-              {#if renderLimits.limits.disk_gb !== undefined}
-                <div><span>Disk</span><strong>{renderLimits.limits.disk_gb} GB</strong></div>
-              {/if}
+              <div><span>CPU</span><strong>{renderLimits.limits.cpu_cores != null ? `${renderLimits.limits.cpu_cores} core` : '—'}</strong></div>
+              <div><span>Memory</span><strong>{renderLimits.limits.memory_mb != null ? `${renderLimits.limits.memory_mb} MB` : '—'}</strong></div>
+              <div><span>Disk</span><strong>{renderLimits.limits.disk_gb != null ? `${renderLimits.limits.disk_gb} GB` : '—'}</strong></div>
             </div>
             <div class="render-details">
               <span>Status: {renderLimits.status || '—'}</span>
