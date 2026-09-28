@@ -268,7 +268,7 @@
     `${healthTimestampFormat.format(new Date(point.timestamp))}: ${healthStatusLabel(point.status)}`;
 
   const heartbeatPageSize = (intervalSeconds: number): number =>
-    Math.max(1, Math.floor(2 * 60 * 60 / Math.max(intervalSeconds, 60)));
+    Math.max(1, Math.floor(60 * 60 / Math.max(intervalSeconds, 60)));
 
   const heartbeatPageCount = (points: ApiHealth['points'], intervalSeconds: number): number =>
     Math.max(1, Math.ceil(points.length / heartbeatPageSize(intervalSeconds)));
@@ -509,7 +509,7 @@
                 disabled={selectedPage >= pageCount - 1}
                 onclick={() => heartbeatPage = Math.min(pageCount - 1, selectedPage + 1)}
               >← Older</button>
-              <span>2-hour window · {pageCount - selectedPage} / {pageCount}</span>
+              <span>1-hour window · {pageCount - selectedPage} / {pageCount}</span>
               <button
                 class="heartbeat-page-button"
                 aria-label="Show newer heartbeat checks"
