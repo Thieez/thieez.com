@@ -487,70 +487,72 @@
         {/if}
       </section>
 
-      <section class="storage-section" aria-labelledby="storage-heading">
-        <div class="section-heading">
-          <h2 id="storage-heading">Database storage</h2>
-        </div>
-        {#if storageLoading}
-          <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking database capacity…</span></div>
-        {:else if storageError}
-          <div class="state-panel error-panel" role="alert"><strong>Storage status is unavailable.</strong><span>{storageError}</span></div>
-        {:else if storage}
-          <div class="storage-card">
-            <div class="storage-values">
-              <div><span>Used</span><strong>{formatBytes(storage.used_bytes)}</strong></div>
-              <div><span>Available</span><strong>{formatBytes(storage.available_bytes)}</strong></div>
-              <div><span>Total</span><strong>{formatBytes(storage.quota_bytes)}</strong></div>
-            </div>
-            <div class="storage-progress" role="progressbar" aria-label="Database storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(storage.usage_ratio * 100)}>
-              <span style={`width: ${Math.min(100, storage.usage_ratio * 100)}%`}></span>
-            </div>
-            <p>{Math.round(storage.usage_ratio * 100)}% of the configured database quota is currently used.</p>
+      <div class="infrastructure-grid">
+        <section class="storage-section" aria-labelledby="storage-heading">
+          <div class="section-heading">
+            <h2 id="storage-heading">Database storage</h2>
           </div>
-        {/if}
-      </section>
+          {#if storageLoading}
+            <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking database capacity…</span></div>
+          {:else if storageError}
+            <div class="state-panel error-panel" role="alert"><strong>Storage status is unavailable.</strong><span>{storageError}</span></div>
+          {:else if storage}
+            <div class="storage-card">
+              <div class="storage-values">
+                <div><span>Used</span><strong>{formatBytes(storage.used_bytes)}</strong></div>
+                <div><span>Available</span><strong>{formatBytes(storage.available_bytes)}</strong></div>
+                <div><span>Total</span><strong>{formatBytes(storage.quota_bytes)}</strong></div>
+              </div>
+              <div class="storage-progress" role="progressbar" aria-label="Database storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(storage.usage_ratio * 100)}>
+                <span style={`width: ${Math.min(100, storage.usage_ratio * 100)}%`}></span>
+              </div>
+              <p>{Math.round(storage.usage_ratio * 100)}% of the configured database quota is currently used.</p>
+            </div>
+          {/if}
+        </section>
 
-      <section class="render-section" aria-labelledby="render-heading">
-        <div class="section-heading">
-          <h2 id="render-heading">API hosting</h2>
-        </div>
-        {#if renderLimitsLoading}
-          <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking Render plan limits…</span></div>
-        {:else if renderLimitsError}
-          <div class="state-panel error-panel" role="alert"><strong>Render plan is unavailable.</strong><span>{renderLimitsError}</span></div>
-        {:else if renderLimits}
-          <div class="storage-card">
-            <div class="render-metric-grid">
-              {#each availableMetricDefinitions() as definition}
-                {@const points = metricPoints(definition.name, definition.aggregate)}
-                {@const limitPoints = definition.limit ? metricPoints(definition.limit, 'average') : []}
-                {@const current = latestValue(points)}
-                {@const limit = latestValue(limitPoints)}
-                {@const unit = metricUnit(renderLimits.metric_series?.[definition.name])}
-                {@const chartMax = Math.max(...points.map((point) => point.value), ...(limit !== undefined ? [limit] : []), 1)}
-                <article class="render-metric">
-                  <div class="render-metric-heading">
-                    <span>{definition.label}</span>
-                    <strong>{formatMetricValue(current, unit)}</strong>
-                  </div>
-                  {#if limit !== undefined}
-                    <div class="metric-bar" role="progressbar" aria-label={`${definition.label} usage`} aria-valuemin="0" aria-valuemax={limit} aria-valuenow={current ?? 0}>
-                      <span style={`width: ${Math.min(100, Math.max(0, (current ?? 0) / Math.max(limit, 0.000001) * 100))}%`}></span>
-                    </div>
-                    <small>{formatMetricValue(limit, metricUnit(renderLimits.metric_series?.[definition.limit!]))} limit</small>
-                  {/if}
-                  {#if points.length}
-                    <svg class="metric-chart" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`${definition.label} over time`}>
-                      <path d={chartPath(points, chartMax)} />
-                    </svg>
-                    <small>{points.length} points · {points[0].timestamp} — {points.at(-1)?.timestamp}</small>
-                  {/if}
-                </article>
-              {/each}
-            </div>
+        <section class="render-section" aria-labelledby="render-heading">
+          <div class="section-heading">
+            <h2 id="render-heading">API hosting</h2>
           </div>
-        {/if}
-      </section>
+          {#if renderLimitsLoading}
+            <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking Render plan limits…</span></div>
+          {:else if renderLimitsError}
+            <div class="state-panel error-panel" role="alert"><strong>Render plan is unavailable.</strong><span>{renderLimitsError}</span></div>
+          {:else if renderLimits}
+            <div class="storage-card">
+              <div class="render-metric-grid">
+                {#each availableMetricDefinitions() as definition}
+                  {@const points = metricPoints(definition.name, definition.aggregate)}
+                  {@const limitPoints = definition.limit ? metricPoints(definition.limit, 'average') : []}
+                  {@const current = latestValue(points)}
+                  {@const limit = latestValue(limitPoints)}
+                  {@const unit = metricUnit(renderLimits.metric_series?.[definition.name])}
+                  {@const chartMax = Math.max(...points.map((point) => point.value), ...(limit !== undefined ? [limit] : []), 1)}
+                  <article class="render-metric">
+                    <div class="render-metric-heading">
+                      <span>{definition.label}</span>
+                      <strong>{formatMetricValue(current, unit)}</strong>
+                    </div>
+                    {#if limit !== undefined}
+                      <div class="metric-bar" role="progressbar" aria-label={`${definition.label} usage`} aria-valuemin="0" aria-valuemax={limit} aria-valuenow={current ?? 0}>
+                        <span style={`width: ${Math.min(100, Math.max(0, (current ?? 0) / Math.max(limit, 0.000001) * 100))}%`}></span>
+                      </div>
+                      <small>{formatMetricValue(limit, metricUnit(renderLimits.metric_series?.[definition.limit!]))} limit</small>
+                    {/if}
+                    {#if points.length}
+                      <svg class="metric-chart" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`${definition.label} over time`}>
+                        <path d={chartPath(points, chartMax)} />
+                      </svg>
+                      <small>{points.length} points · {points[0].timestamp} — {points.at(-1)?.timestamp}</small>
+                    {/if}
+                  </article>
+                {/each}
+              </div>
+            </div>
+          {/if}
+        </section>
+      </div>
 
       <section class="project-section" aria-labelledby="projects-heading">
         <div class="section-heading">
