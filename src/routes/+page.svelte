@@ -182,13 +182,7 @@
   type ChartPoint = { timestamp: string; value: number };
   type RenderMetricName = 'cpu' | 'cpu_limit' | 'memory' | 'memory_limit' | 'bandwidth' | 'http_requests' | 'http_latency' | 'disk_usage' | 'disk_capacity' | 'active_connections';
   const metricDefinitions: Array<{ name: RenderMetricName; label: string; limit?: RenderMetricName; aggregate: 'average' | 'sum' }> = [
-    { name: 'cpu', label: 'CPU utilization', limit: 'cpu_limit', aggregate: 'average' },
-    { name: 'memory', label: 'Memory utilization', limit: 'memory_limit', aggregate: 'average' },
-    { name: 'bandwidth', label: 'Outbound bandwidth', aggregate: 'sum' },
-    { name: 'http_requests', label: 'HTTP requests', aggregate: 'sum' },
-    { name: 'http_latency', label: 'HTTP latency', aggregate: 'average' },
-    { name: 'disk_usage', label: 'Disk usage', limit: 'disk_capacity', aggregate: 'average' },
-    { name: 'active_connections', label: 'Active connections', aggregate: 'average' }
+    { name: 'memory', label: 'Memory utilization', limit: 'memory_limit', aggregate: 'average' }
   ];
 
   const seriesFor = (series: RenderMetricSeries[] | undefined, aggregate: 'average' | 'sum'): ChartPoint[] => {
@@ -384,7 +378,6 @@
       <section class="storage-section" aria-labelledby="storage-heading">
         <div class="section-heading">
           <h2 id="storage-heading">Database storage</h2>
-          <span>SUPABASE / LIVE</span>
         </div>
         {#if storageLoading}
           <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking database capacity…</span></div>
@@ -408,7 +401,6 @@
       <section class="render-section" aria-labelledby="render-heading">
         <div class="section-heading">
           <h2 id="render-heading">API hosting</h2>
-          <span>RENDER.COM / PLAN</span>
         </div>
         {#if renderLimitsLoading}
           <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking Render plan limits…</span></div>
@@ -416,12 +408,6 @@
           <div class="state-panel error-panel" role="alert"><strong>Render plan is unavailable.</strong><span>{renderLimitsError}</span></div>
         {:else if renderLimits}
           <div class="storage-card">
-            <div class="render-summary">
-              <div><span>Service</span><strong>{renderLimits.service_name}</strong></div>
-              <div><span>Plan</span><strong>{renderLimits.plan}</strong></div>
-              <div><span>Region</span><strong>{renderLimits.region || '—'}</strong></div>
-              <div><span>Status</span><strong>{renderLimits.status || '—'}</strong></div>
-            </div>
             <div class="render-metric-grid">
               {#each availableMetricDefinitions() as definition}
                 {@const points = metricPoints(definition.name, definition.aggregate)}
