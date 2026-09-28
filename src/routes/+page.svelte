@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { onMount } from 'svelte';
-  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, getLisnntoLimits, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type AuthSession, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
+  import { getApiHealth, getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, getLisnntoLimits, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type ApiHealth, type AuthSession, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
 
   let isLisnnto = false;
   let isNote = false;
@@ -22,6 +22,9 @@
   let storage: DatabaseStorage | null = null;
   let storageLoading = false;
   let storageError = '';
+  let apiHealth: ApiHealth | null = null;
+  let apiHealthLoading = false;
+  let apiHealthError = '';
   let renderLimits: RenderLimits | null = null;
   let renderLimitsLoading = false;
   let renderLimitsError = '';
@@ -62,8 +65,20 @@
     } else {
       storageLoading = true;
       storageError = '';
+      apiHealthLoading = true;
+      apiHealthError = '';
       renderLimitsLoading = true;
       renderLimitsError = '';
+      void getApiHealth()
+        .then((result) => {
+          apiHealth = result;
+        })
+        .catch((cause) => {
+          apiHealthError = cause instanceof Error ? cause.message : 'API health could not be loaded.';
+        })
+        .finally(() => {
+          apiHealthLoading = false;
+        });
       void getDatabaseStorage()
         .then((result) => {
           storage = result;
@@ -229,6 +244,17 @@
 
   const availableMetricDefinitions = (): typeof metricDefinitions =>
     metricDefinitions.filter((definition) => metricPoints(definition.name, definition.aggregate).length > 0);
+
+  const healthStatusLabel = (status: ApiHealth['current_status']): string => ({
+    up: 'Operational',
+    down: 'Down',
+    paused: 'Paused',
+    unknown: 'Unknown'
+  })[status];
+
+  const healthTimestampFormat = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' });
+  const healthPointLabel = (point: ApiHealth['points'][number]): string =>
+    `${healthTimestampFormat.format(new Date(point.timestamp))}: ${healthStatusLabel(point.status)}`;
 </script>
 
 <svelte:head>
@@ -436,6 +462,56 @@
                 </article>
               {/each}
             </div>
+          </div>
+        {/if}
+      </section>
+
+      <section class="health-section" aria-labelledby="health-heading">
+        <div class="section-heading">
+          <h2 id="health-heading">API heartbeat</h2>
+        </div>
+        {#if apiHealthLoading}
+          <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking API health…</span></div>
+        {:else if apiHealthError}
+          <div class="state-panel error-panel" role="alert"><strong>API health is unavailable.</strong><span>{apiHealthError}</span></div>
+        {:else if apiHealth}
+          <div class="storage-card heartbeat-card">
+            <div class="heartbeat-summary">
+              <div>
+                <span>Current status</span>
+                <strong
+                  class:heartbeat-status-up={apiHealth.current_status === 'up'}
+                  class:heartbeat-status-down={apiHealth.current_status === 'down'}
+                  class:heartbeat-status-paused={apiHealth.current_status === 'paused'}
+                >{healthStatusLabel(apiHealth.current_status)}</strong>
+              </div>
+              <div>
+                <span>Uptime · 24 hours</span>
+                <strong>{apiHealth.uptime_percent.toFixed(2)}%</strong>
+              </div>
+              <div>
+                <span>Check interval</span>
+                <strong>{Math.round(apiHealth.interval_seconds / 60)} min</strong>
+              </div>
+            </div>
+            <div class="heartbeat-chart" role="img" aria-label={`${apiHealth.monitor.name} API health over the last 24 hours: ${apiHealth.uptime_percent.toFixed(2)}% uptime`}>
+              {#each apiHealth.points as point}
+                <span
+                  class:heartbeat-down={point.status === 'down'}
+                  class:heartbeat-paused={point.status === 'paused'}
+                  class:heartbeat-unknown={point.status === 'unknown'}
+                  class:heartbeat-up={point.status === 'up'}
+                  title={healthPointLabel(point)}
+                ></span>
+              {/each}
+            </div>
+            <div class="heartbeat-legend">
+              <span><i class="heartbeat-up"></i>Operational</span>
+              <span><i class="heartbeat-down"></i>Outage</span>
+              <span><i class="heartbeat-unknown"></i>Unknown</span>
+              <span><i class="heartbeat-paused"></i>Paused</span>
+            </div>
+            <div class="heartbeat-range"><span>24 hours ago</span><span>Now</span></div>
           </div>
         {/if}
       </section>

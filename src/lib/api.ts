@@ -59,6 +59,20 @@ export type DatabaseStorage = {
   usage_ratio: number;
 };
 
+export type ApiHealthPoint = {
+  timestamp: string;
+  status: 'up' | 'down' | 'paused' | 'unknown';
+};
+
+export type ApiHealth = {
+  monitor: { id: number; name: string };
+  current_status: ApiHealthPoint['status'];
+  uptime_percent: number;
+  interval_seconds: number;
+  generated_at: string;
+  points: ApiHealthPoint[];
+};
+
 export type RenderMetricSeries = {
   labels?: Array<{ field?: string; value?: string }>;
   unit?: string;
@@ -301,6 +315,10 @@ export async function getProjects(): Promise<ProjectResult> {
 
 export async function getDatabaseStorage(): Promise<DatabaseStorage> {
   return fetchJson<DatabaseStorage>('/lisnnto/v0/storage');
+}
+
+export async function getApiHealth(): Promise<ApiHealth> {
+  return fetchJson<ApiHealth>('/uptime/v0/health');
 }
 
 export async function getRenderLimits(): Promise<RenderLimits> {
