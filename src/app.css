@@ -6,6 +6,7 @@ a{color:inherit}
 button{font:inherit}
 .site-shell{min-height:100vh;display:flex;flex-direction:column}
 .masthead{height:82px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 clamp(22px,5vw,72px)}
+.stale-notice{padding:12px clamp(22px,5vw,72px);background:#fff1c9;color:#60480e;font-size:12px;line-height:1.5}
 .wordmark{display:inline-flex;align-items:baseline;font-size:26px;font-weight:800;letter-spacing:-.07em;text-decoration:none}
 .wordmark .project-word{margin-right:.3em;color:var(--lime)}
 .wordmark-dot{color:var(--lime)}

@@ -1,17 +1,38 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { onMount } from 'svelte';
+  import type { PageData } from './$types';
   import { getApiHealth, getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, getLisnntoLimits, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type ApiHealth, type AuthSession, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
 
-  let isLisnnto = false;
-  let isNote = false;
-  let projectName = '';
-  let projects: Project[] = [];
-  let build: LatestBuild | null = null;
-  let loading = true;
-  let error = '';
-  let projectError = '';
-  let apiStatus: 'checking' | 'online' | 'degraded' | 'offline' = 'checking';
+  export let data: PageData;
+
+  let isLisnnto = data.isLisnnto;
+  let isNote = data.isNote;
+  let projectName = data.projectName;
+  let projects: Project[] = data.projects?.value?.projects ?? [];
+  let build: LatestBuild | null = data.build?.value ?? null;
+  let loading = false;
+  let error = data.build?.value ? '' : data.build?.error ?? '';
+  let projectError = data.projects?.value ? '' : data.projects?.error ?? '';
+  let apiStatus: 'checking' | 'online' | 'degraded' | 'offline' =
+    data.build?.stale || data.projects?.stale || data.projects?.value?.source === 'fallback'
+      ? 'degraded'
+      : data.build?.value || data.projects?.value
+        ? 'online'
+        : 'checking';
+  const initialCacheResults: Array<
+    [string, { stale: boolean; updatedAt: string | null; value: unknown } | null]
+  > = [
+    ['build', data.build],
+    ['projects', data.projects],
+    ['heartbeat', data.apiHealth],
+    ['storage', data.storage],
+    ['render', data.renderLimits]
+  ];
+  let staleDataResources = new Set(
+    initialCacheResults.filter(([, result]) => result?.stale).map(([resource]) => resource)
+  );
+  let hasProjectsData = data.projects?.value !== null && data.projects?.value !== undefined;
   let authSession: AuthSession | null = null;
   let authLoading = true;
   let profileMenuOpen = false;
@@ -19,17 +40,17 @@
   let limits: LisnntoLimits | null = null;
   let limitsLoading = false;
   let limitsError = '';
-  let storage: DatabaseStorage | null = null;
+  let storage: DatabaseStorage | null = data.storage?.value ?? null;
   let storageLoading = false;
-  let storageError = '';
-  let apiHealth: ApiHealth | null = null;
+  let storageError = storage ? '' : data.storage?.error ?? '';
+  let apiHealth: ApiHealth | null = data.apiHealth?.value ?? null;
   let apiHealthLoading = false;
-  let apiHealthError = '';
+  let apiHealthError = apiHealth ? '' : data.apiHealth?.error ?? '';
   let healthRefreshTimer: number | undefined;
   let heartbeatPage = 0;
-  let renderLimits: RenderLimits | null = null;
+  let renderLimits: RenderLimits | null = data.renderLimits?.value ?? null;
   let renderLimitsLoading = false;
-  let renderLimitsError = '';
+  let renderLimitsError = renderLimits ? '' : data.renderLimits?.error ?? '';
 
   const detectExperience = () => {
     if (!browser) return;
@@ -51,33 +72,42 @@
 
   const load = async () => {
     detectExperience();
-    loading = true;
+    loading = isLisnnto || isNote ? build === null : !hasProjectsData;
     error = '';
     projectError = '';
-    apiStatus = 'checking';
+    apiStatus = isLisnnto || isNote
+      ? build ? 'online' : 'checking'
+      : hasProjectsData ? 'online' : 'checking';
 
     if (isLisnnto || isNote) {
       try {
         build = isNote ? await getLatestPluginBuild() : await getLatestBuild();
         apiStatus = 'online';
       } catch (cause) {
-        apiStatus = 'offline';
-        error = cause instanceof Error ? cause.message : 'The latest build could not be loaded.';
+        if (build) {
+          apiStatus = 'degraded';
+          markStale('build', true);
+        } else {
+          apiStatus = 'offline';
+          error = cause instanceof Error ? cause.message : 'The latest build could not be loaded.';
+        }
       }
     } else {
-      storageLoading = true;
+      storageLoading = storage === null;
       storageError = '';
       if (!apiHealth) apiHealthLoading = true;
       apiHealthError = '';
-      renderLimitsLoading = true;
+      renderLimitsLoading = renderLimits === null;
       renderLimitsError = '';
       void refreshApiHealth();
       void getDatabaseStorage()
         .then((result) => {
           storage = result;
+          markStale('storage', false);
         })
         .catch((cause) => {
-          storageError = cause instanceof Error ? cause.message : 'Database storage could not be loaded.';
+          if (storage) markStale('storage', true);
+          else storageError = cause instanceof Error ? cause.message : 'Database storage could not be loaded.';
         })
         .finally(() => {
           storageLoading = false;
@@ -85,9 +115,11 @@
       void getRenderLimits()
         .then((result) => {
           renderLimits = result;
+          markStale('render', false);
         })
         .catch((cause) => {
-          renderLimitsError = cause instanceof Error ? cause.message : 'Render limits could not be loaded.';
+          if (renderLimits) markStale('render', true);
+          else renderLimitsError = cause instanceof Error ? cause.message : 'Render limits could not be loaded.';
         })
         .finally(() => {
           renderLimitsLoading = false;
@@ -95,10 +127,17 @@
       try {
         const result = await getProjects();
         projects = result.projects;
+        hasProjectsData = true;
+        markStale('projects', false);
         apiStatus = result.source === 'fallback' ? 'degraded' : 'online';
       } catch (cause) {
-        apiStatus = 'offline';
-        projectError = cause instanceof Error ? cause.message : 'Projects could not be loaded.';
+        if (hasProjectsData) {
+          apiStatus = 'degraded';
+          markStale('projects', true);
+        } else {
+          apiStatus = 'offline';
+          projectError = cause instanceof Error ? cause.message : 'Projects could not be loaded.';
+        }
       }
     }
 
@@ -110,8 +149,11 @@
     try {
       apiHealth = await getApiHealth();
       apiHealthError = '';
+      markStale('heartbeat', false);
     } catch (cause) {
-      if (!apiHealth) {
+      if (apiHealth) {
+        markStale('heartbeat', true);
+      } else {
         apiHealthError = cause instanceof Error ? cause.message : 'API health could not be loaded.';
       }
     } finally {
@@ -119,9 +161,24 @@
     }
   };
 
+  const markStale = (resource: string, stale: boolean) => {
+    const resources = new Set(staleDataResources);
+    if (stale) resources.add(resource);
+    else resources.delete(resource);
+    staleDataResources = resources;
+  };
+
   onMount(() => {
     document.addEventListener('click', closeMenus);
     document.addEventListener('keydown', handleDocumentKeydown);
+    for (const [resource, result] of initialCacheResults) {
+      if (
+        result?.updatedAt &&
+        Date.now() - new Date(result.updatedAt).getTime() > 60_000
+      ) {
+        markStale(resource, true);
+      }
+    }
     let unsubscribe: () => void = () => undefined;
     void (async () => {
       const authTask = restoreAuth()
@@ -361,6 +418,11 @@
       {/if}
     </div>
   </header>
+  {#if staleDataResources.size}
+    <div class="stale-notice" role="status">
+      Showing cached data because the API could not be reached. The information may be out of date.
+    </div>
+  {/if}
 
   <main class="main-content">
     {#if accountOpen}
