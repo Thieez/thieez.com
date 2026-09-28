@@ -26,6 +26,7 @@
   let apiHealthLoading = false;
   let apiHealthError = '';
   let healthRefreshTimer: number | undefined;
+  let heartbeatPage = 0;
   let renderLimits: RenderLimits | null = null;
   let renderLimitsLoading = false;
   let renderLimitsError = '';
@@ -266,6 +267,22 @@
   const healthPointLabel = (point: ApiHealth['points'][number]): string =>
     `${healthTimestampFormat.format(new Date(point.timestamp))}: ${healthStatusLabel(point.status)}`;
 
+  const heartbeatPageSize = (intervalSeconds: number): number =>
+    Math.max(1, Math.floor(2 * 60 * 60 / Math.max(intervalSeconds, 60)));
+
+  const heartbeatPageCount = (points: ApiHealth['points'], intervalSeconds: number): number =>
+    Math.max(1, Math.ceil(points.length / heartbeatPageSize(intervalSeconds)));
+
+  const heartbeatPagePoints = (
+    points: ApiHealth['points'],
+    intervalSeconds: number,
+    page: number
+  ): ApiHealth['points'] => {
+    const size = heartbeatPageSize(intervalSeconds);
+    const end = Math.max(0, points.length - page * size);
+    return points.slice(Math.max(0, end - size), end);
+  };
+
   const heartbeatTraces = (points: ApiHealth['points']): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
     const traces: Array<{ status: ApiHealth['points'][number]['status']; path: string }> = [];
     const cycleWidth = 1200 / points.length;
@@ -439,7 +456,9 @@
         {:else if apiHealthError}
           <div class="state-panel error-panel" role="alert"><strong>API health is unavailable.</strong><span>{apiHealthError}</span></div>
         {:else if apiHealth}
-          {@const recentHeartbeatPoints = apiHealth.points.slice(-Math.max(1, Math.floor(7200 / Math.max(apiHealth.interval_seconds, 60))))}
+          {@const pageCount = heartbeatPageCount(apiHealth.points, apiHealth.interval_seconds)}
+          {@const selectedPage = Math.min(heartbeatPage, pageCount - 1)}
+          {@const visibleHeartbeatPoints = heartbeatPagePoints(apiHealth.points, apiHealth.interval_seconds, selectedPage)}
           <div class="heartbeat-card">
             <div class="heartbeat-summary">
               <div>
@@ -460,8 +479,8 @@
               </div>
             </div>
             <div class="heartbeat-monitor">
-              <svg viewBox="0 0 1200 120" preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat over the last two hours; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
-                {#each heartbeatTraces(recentHeartbeatPoints) as trace}
+              <svg viewBox="0 0 1200 120" preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat from ${healthPointLabel(visibleHeartbeatPoints[0])} to ${healthPointLabel(visibleHeartbeatPoints.at(-1)!)}; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
+                {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
                   <path
                     class:heartbeat-trace-up={trace.status === 'up'}
                     class:heartbeat-trace-down={trace.status === 'down'}
@@ -479,9 +498,24 @@
               <span><i class="heartbeat-unknown"></i>No data</span>
             </div>
             <div class="heartbeat-range">
-              <span>{healthPointLabel(recentHeartbeatPoints[0])}</span>
+              <span>{healthPointLabel(visibleHeartbeatPoints[0])}</span>
               <span>Each beat = one {Math.round(apiHealth.interval_seconds / 60)}-minute check</span>
-              <span>{healthPointLabel(recentHeartbeatPoints.at(-1)!)}</span>
+              <span>{healthPointLabel(visibleHeartbeatPoints.at(-1)!)}</span>
+            </div>
+            <div class="heartbeat-pagination" aria-label="Heartbeat time range">
+              <button
+                class="heartbeat-page-button"
+                aria-label="Show older heartbeat checks"
+                disabled={selectedPage >= pageCount - 1}
+                onclick={() => heartbeatPage = Math.min(pageCount - 1, selectedPage + 1)}
+              >← Older</button>
+              <span>2-hour window · {pageCount - selectedPage} / {pageCount}</span>
+              <button
+                class="heartbeat-page-button"
+                aria-label="Show newer heartbeat checks"
+                disabled={selectedPage === 0}
+                onclick={() => heartbeatPage = Math.max(0, selectedPage - 1)}
+              >Newer →</button>
             </div>
           </div>
         {/if}
@@ -530,21 +564,25 @@
                   {@const unit = metricUnit(renderLimits.metric_series?.[definition.name])}
                   {@const chartMax = Math.max(...points.map((point) => point.value), ...(limit !== undefined ? [limit] : []), 1)}
                   <article class="render-metric">
-                    <div class="render-metric-heading">
-                      <span>{definition.label}</span>
-                      <strong>{formatMetricValue(current, unit)}</strong>
-                    </div>
-                    {#if limit !== undefined}
-                      <div class="metric-bar" role="progressbar" aria-label={`${definition.label} usage`} aria-valuemin="0" aria-valuemax={limit} aria-valuenow={current ?? 0}>
-                        <span style={`width: ${Math.min(100, Math.max(0, (current ?? 0) / Math.max(limit, 0.000001) * 100))}%`}></span>
+                    <div class="render-metric-data">
+                      <div class="render-metric-heading">
+                        <span>{definition.label}</span>
+                        <strong>{formatMetricValue(current, unit)}</strong>
                       </div>
-                      <small>{formatMetricValue(limit, metricUnit(renderLimits.metric_series?.[definition.limit!]))} limit</small>
-                    {/if}
+                      {#if limit !== undefined}
+                        <div class="metric-bar" role="progressbar" aria-label={`${definition.label} usage`} aria-valuemin="0" aria-valuemax={limit} aria-valuenow={current ?? 0}>
+                          <span style={`width: ${Math.min(100, Math.max(0, (current ?? 0) / Math.max(limit, 0.000001) * 100))}%`}></span>
+                        </div>
+                        <small>{formatMetricValue(limit, metricUnit(renderLimits.metric_series?.[definition.limit!]))} limit</small>
+                      {/if}
+                    </div>
                     {#if points.length}
-                      <svg class="metric-chart" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`${definition.label} over time`}>
-                        <path d={chartPath(points, chartMax)} />
-                      </svg>
-                      <small>{points.length} points · {points[0].timestamp} — {points.at(-1)?.timestamp}</small>
+                      <div class="render-metric-history">
+                        <svg class="metric-chart" viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`${definition.label} over time`}>
+                          <path d={chartPath(points, chartMax)} />
+                        </svg>
+                        <small>{points.length} points · {points[0].timestamp} — {points.at(-1)?.timestamp}</small>
+                      </div>
                     {/if}
                   </article>
                 {/each}
