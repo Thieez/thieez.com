@@ -25,6 +25,7 @@
   let apiHealth: ApiHealth | null = null;
   let apiHealthLoading = false;
   let apiHealthError = '';
+  let healthRefreshTimer: number | undefined;
   let renderLimits: RenderLimits | null = null;
   let renderLimitsLoading = false;
   let renderLimitsError = '';
@@ -65,20 +66,11 @@
     } else {
       storageLoading = true;
       storageError = '';
-      apiHealthLoading = true;
+      if (!apiHealth) apiHealthLoading = true;
       apiHealthError = '';
       renderLimitsLoading = true;
       renderLimitsError = '';
-      void getApiHealth()
-        .then((result) => {
-          apiHealth = result;
-        })
-        .catch((cause) => {
-          apiHealthError = cause instanceof Error ? cause.message : 'API health could not be loaded.';
-        })
-        .finally(() => {
-          apiHealthLoading = false;
-        });
+      void refreshApiHealth();
       void getDatabaseStorage()
         .then((result) => {
           storage = result;
@@ -112,6 +104,20 @@
     loading = false;
   };
 
+  const refreshApiHealth = async () => {
+    if (!apiHealth) apiHealthLoading = true;
+    try {
+      apiHealth = await getApiHealth();
+      apiHealthError = '';
+    } catch (cause) {
+      if (!apiHealth) {
+        apiHealthError = cause instanceof Error ? cause.message : 'API health could not be loaded.';
+      }
+    } finally {
+      apiHealthLoading = false;
+    }
+  };
+
   onMount(() => {
     document.addEventListener('click', closeMenus);
     document.addEventListener('keydown', handleDocumentKeydown);
@@ -132,6 +138,9 @@
       await authTask;
 
       if (!isLisnnto && !isNote) {
+        healthRefreshTimer = window.setInterval(() => {
+          void refreshApiHealth();
+        }, 5 * 60 * 1000);
         unsubscribe = subscribeToProjectUpdates(() => {
           void load();
         });
@@ -140,6 +149,7 @@
 
     return () => {
       unsubscribe();
+      if (healthRefreshTimer !== undefined) window.clearInterval(healthRefreshTimer);
       document.removeEventListener('click', closeMenus);
       document.removeEventListener('keydown', handleDocumentKeydown);
     };
@@ -255,6 +265,25 @@
   const healthTimestampFormat = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' });
   const healthPointLabel = (point: ApiHealth['points'][number]): string =>
     `${healthTimestampFormat.format(new Date(point.timestamp))}: ${healthStatusLabel(point.status)}`;
+
+  const heartbeatTraces = (points: ApiHealth['points']): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
+    const traces: Array<{ status: ApiHealth['points'][number]['status']; path: string }> = [];
+    const cycleWidth = 1200 / points.length;
+    for (const [index, point] of points.entries()) {
+      const x = index * cycleWidth;
+      let trace = traces.at(-1);
+      if (!trace || trace.status !== point.status) {
+        trace = { status: point.status, path: '' };
+        traces.push(trace);
+      }
+      const beat = point.status === 'up'
+        ? `M${x.toFixed(2)} 60 H${(x + cycleWidth * 0.28).toFixed(2)} Q${(x + cycleWidth * 0.32).toFixed(2)} 60 ${(x + cycleWidth * 0.36).toFixed(2)} 54 H${(x + cycleWidth * 0.4).toFixed(2)} L${(x + cycleWidth * 0.46).toFixed(2)} 14 L${(x + cycleWidth * 0.52).toFixed(2)} 105 L${(x + cycleWidth * 0.58).toFixed(2)} 60 Q${(x + cycleWidth * 0.64).toFixed(2)} 60 ${(x + cycleWidth * 0.68).toFixed(2)} 53 Q${(x + cycleWidth * 0.72).toFixed(2)} 60 ${(x + cycleWidth * 0.78).toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`
+        : `M${x.toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`;
+      trace.path += `${trace.path ? ' ' : ''}${beat}`;
+    }
+    return traces;
+  };
+
 </script>
 
 <svelte:head>
@@ -401,6 +430,63 @@
         <p class="lede">Small software experiments, shipped carefully. A living index of what’s on our workbench.</p>
       </section>
 
+      <section class="health-section" aria-labelledby="health-heading">
+        <div class="section-heading">
+          <h2 id="health-heading">API heartbeat</h2>
+        </div>
+        {#if apiHealthLoading}
+          <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking API health…</span></div>
+        {:else if apiHealthError}
+          <div class="state-panel error-panel" role="alert"><strong>API health is unavailable.</strong><span>{apiHealthError}</span></div>
+        {:else if apiHealth}
+          {@const recentHeartbeatPoints = apiHealth.points.slice(-Math.max(1, Math.floor(7200 / Math.max(apiHealth.interval_seconds, 60))))}
+          <div class="heartbeat-card">
+            <div class="heartbeat-summary">
+              <div>
+                <span>Current status</span>
+                <strong
+                  class:heartbeat-status-up={apiHealth.current_status === 'up'}
+                  class:heartbeat-status-down={apiHealth.current_status === 'down'}
+                  class:heartbeat-status-paused={apiHealth.current_status === 'paused'}
+                >{healthStatusLabel(apiHealth.current_status)}</strong>
+              </div>
+              <div>
+                <span>Uptime · 24 hours</span>
+                <strong>{apiHealth.uptime_percent.toFixed(2)}%</strong>
+              </div>
+              <div>
+                <span>Check interval</span>
+                <strong>{Math.round(apiHealth.interval_seconds / 60)} min</strong>
+              </div>
+            </div>
+            <div class="heartbeat-monitor">
+              <svg viewBox="0 0 1200 120" preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat over the last two hours; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
+                {#each heartbeatTraces(recentHeartbeatPoints) as trace}
+                  <path
+                    class:heartbeat-trace-up={trace.status === 'up'}
+                    class:heartbeat-trace-down={trace.status === 'down'}
+                    class:heartbeat-trace-paused={trace.status === 'paused'}
+                    class:heartbeat-trace-unknown={trace.status === 'unknown'}
+                    d={trace.path}
+                  />
+                {/each}
+                <circle class:heartbeat-ping-down={apiHealth.current_status === 'down'} cx="1196" cy="60" r="3"></circle>
+              </svg>
+            </div>
+            <div class="heartbeat-legend">
+              <span><i class="heartbeat-up"></i>Ping received</span>
+              <span><i class="heartbeat-down"></i>Outage</span>
+              <span><i class="heartbeat-unknown"></i>No data</span>
+            </div>
+            <div class="heartbeat-range">
+              <span>{healthPointLabel(recentHeartbeatPoints[0])}</span>
+              <span>Each beat = one {Math.round(apiHealth.interval_seconds / 60)}-minute check</span>
+              <span>{healthPointLabel(recentHeartbeatPoints.at(-1)!)}</span>
+            </div>
+          </div>
+        {/if}
+      </section>
+
       <section class="storage-section" aria-labelledby="storage-heading">
         <div class="section-heading">
           <h2 id="storage-heading">Database storage</h2>
@@ -462,56 +548,6 @@
                 </article>
               {/each}
             </div>
-          </div>
-        {/if}
-      </section>
-
-      <section class="health-section" aria-labelledby="health-heading">
-        <div class="section-heading">
-          <h2 id="health-heading">API heartbeat</h2>
-        </div>
-        {#if apiHealthLoading}
-          <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking API health…</span></div>
-        {:else if apiHealthError}
-          <div class="state-panel error-panel" role="alert"><strong>API health is unavailable.</strong><span>{apiHealthError}</span></div>
-        {:else if apiHealth}
-          <div class="storage-card heartbeat-card">
-            <div class="heartbeat-summary">
-              <div>
-                <span>Current status</span>
-                <strong
-                  class:heartbeat-status-up={apiHealth.current_status === 'up'}
-                  class:heartbeat-status-down={apiHealth.current_status === 'down'}
-                  class:heartbeat-status-paused={apiHealth.current_status === 'paused'}
-                >{healthStatusLabel(apiHealth.current_status)}</strong>
-              </div>
-              <div>
-                <span>Uptime · 24 hours</span>
-                <strong>{apiHealth.uptime_percent.toFixed(2)}%</strong>
-              </div>
-              <div>
-                <span>Check interval</span>
-                <strong>{Math.round(apiHealth.interval_seconds / 60)} min</strong>
-              </div>
-            </div>
-            <div class="heartbeat-chart" role="img" aria-label={`${apiHealth.monitor.name} API health over the last 24 hours: ${apiHealth.uptime_percent.toFixed(2)}% uptime`}>
-              {#each apiHealth.points as point}
-                <span
-                  class:heartbeat-down={point.status === 'down'}
-                  class:heartbeat-paused={point.status === 'paused'}
-                  class:heartbeat-unknown={point.status === 'unknown'}
-                  class:heartbeat-up={point.status === 'up'}
-                  title={healthPointLabel(point)}
-                ></span>
-              {/each}
-            </div>
-            <div class="heartbeat-legend">
-              <span><i class="heartbeat-up"></i>Operational</span>
-              <span><i class="heartbeat-down"></i>Outage</span>
-              <span><i class="heartbeat-unknown"></i>Unknown</span>
-              <span><i class="heartbeat-paused"></i>Paused</span>
-            </div>
-            <div class="heartbeat-range"><span>24 hours ago</span><span>Now</span></div>
           </div>
         {/if}
       </section>
