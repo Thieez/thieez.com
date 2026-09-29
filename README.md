@@ -35,10 +35,14 @@ is unavailable instead of inventing a heartbeat line. The process cache itself
 is lost on server restart.
 
 The header also supports Google login through the same OAuth flow as the
-Obsidian plugin (`/auth/v0/login`). The returned access and refresh tokens are
-kept in browser `localStorage`; the refresh token is exchanged automatically
-when the access token expires. Configure the auth service CORS allowlist with
-the deployed website origin.
+Obsidian plugin (`/auth/v0/login`). The website receives the OAuth callback on
+its own server and stores access and refresh tokens in `HttpOnly`, `Secure`
+cookies instead of browser storage. Its server refreshes the access token with
+the API's rotating refresh-token endpoint and touches the API session while
+the user is active; both the browser cookie and API session expire after 30
+days of inactivity. Authenticated limits are proxied through the site server,
+so tokens are never exposed to page JavaScript. Configure the auth service CORS
+allowlist with the deployed website origin.
 
 ## Build and deploy
 

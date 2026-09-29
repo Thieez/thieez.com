@@ -2,7 +2,8 @@
   import { browser } from '$app/environment';
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
-  import { getApiHealth, getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, getLisnntoLimits, logout, restoreAuth, startLogin, subscribeToProjectUpdates, type ApiHealth, type AuthSession, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
+  import { getApiHealth, getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToProjectUpdates, type ApiHealth, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
+  import { getLisnntoLimits, logout, restoreAuth, startLogin, type AuthSession } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -47,6 +48,7 @@
   let apiHealthLoading = false;
   let apiHealthError = apiHealth ? '' : data.apiHealth?.error ?? '';
   let healthRefreshTimer: number | undefined;
+  let authRefreshTimer: number | undefined;
   let heartbeatPage = 0;
   let renderLimits: RenderLimits | null = data.renderLimits?.value ?? null;
   let renderLimitsLoading = false;
@@ -184,6 +186,21 @@
       const authTask = restoreAuth()
         .then((session) => {
           authSession = session;
+          if (session) {
+            authRefreshTimer = window.setInterval(() => {
+              void restoreAuth()
+                .then((updatedSession) => {
+                  authSession = updatedSession;
+                  if (!updatedSession && authRefreshTimer !== undefined) {
+                    window.clearInterval(authRefreshTimer);
+                    authRefreshTimer = undefined;
+                  }
+                })
+                .catch(() => {
+                  authSession = null;
+                });
+            }, 15 * 60 * 1000);
+          }
         })
         .catch(() => {
           authSession = null;
@@ -208,6 +225,7 @@
     return () => {
       unsubscribe();
       if (healthRefreshTimer !== undefined) window.clearInterval(healthRefreshTimer);
+      if (authRefreshTimer !== undefined) window.clearInterval(authRefreshTimer);
       document.removeEventListener('click', closeMenus);
       document.removeEventListener('keydown', handleDocumentKeydown);
     };
@@ -216,10 +234,14 @@
   const handleLogout = async () => {
     profileMenuOpen = false;
     accountOpen = false;
-    await logout(authSession);
-    authSession = null;
-    limits = null;
-    limitsError = '';
+    try {
+      await logout();
+    } finally {
+      authSession = null;
+      limits = null;
+      limitsError = '';
+      if (authRefreshTimer !== undefined) window.clearInterval(authRefreshTimer);
+    }
   };
 
   const openAccount = async () => {
@@ -229,7 +251,7 @@
     limitsLoading = true;
     limitsError = '';
     try {
-      limits = await getLisnntoLimits(authSession.accessToken);
+      limits = await getLisnntoLimits();
     } catch (cause) {
       limitsError = cause instanceof Error ? cause.message : 'Could not load Lisnnto limits.';
     } finally {
