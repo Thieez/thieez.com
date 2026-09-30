@@ -13,7 +13,8 @@ export const GET: RequestHandler = async ({ cookies, fetch, url }) => {
               avatar_url:
                 typeof session.user.avatar_url === 'string' ? session.user.avatar_url : undefined
             }
-          : null
+          : null,
+        is_admin: session?.user?.is_admin === true
       },
       { headers: { 'cache-control': 'no-store' } }
     );

@@ -6,6 +6,20 @@ export type AuthSession = {
   user: AuthUser | null;
 };
 
+export type AdminAccessEntry = {
+  email: string;
+  access_type?: 'whitelist' | 'blacklist';
+  reason?: string | null;
+  updated_at?: string;
+};
+
+export type AdminAccessData = {
+  whitelist_enabled: boolean;
+  whitelist: AdminAccessEntry[];
+  blacklist: AdminAccessEntry[];
+  admins: Array<{ user_id: string; email: string | null; name: string | null }>;
+};
+
 async function request(path: string, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -31,8 +45,10 @@ export async function restoreAuth(): Promise<AuthSession | null> {
     headers: { Accept: 'application/json' }
   });
   if (!response.ok) throw new Error(`Could not restore session (${response.status})`);
-  const payload = (await response.json()) as { user?: AuthUser | null };
-  return payload.user ? { user: payload.user } : null;
+  const payload = (await response.json()) as { user?: AuthUser | null; is_admin?: boolean };
+  return payload.user
+    ? { user: { ...payload.user, is_admin: payload.is_admin === true } }
+    : null;
 }
 
 export async function logout(): Promise<void> {
@@ -48,4 +64,49 @@ export async function getLisnntoLimits(): Promise<import('$lib/api').LisnntoLimi
     throw new Error(`Could not load Lisnnto limits (${response.status})`);
   }
   return response.json() as Promise<import('$lib/api').LisnntoLimits>;
+}
+
+async function requestAdmin<T>(
+  method: string,
+  body?: Record<string, unknown>,
+  query?: URLSearchParams
+): Promise<T> {
+  const response = await request(`/admin/access${query ? `?${query}` : ''}`, {
+    method,
+    headers: {
+      Accept: 'application/json',
+      ...(body ? { 'Content-Type': 'application/json' } : {})
+    },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  });
+  const payload = (await response.json()) as T & { detail?: string };
+  if (!response.ok) {
+    throw new Error(payload.detail || `Admin request failed (${response.status})`);
+  }
+  return payload;
+}
+
+export function getAdminAccess(): Promise<AdminAccessData> {
+  return requestAdmin<AdminAccessData>('GET');
+}
+
+export async function updateWhitelistSetting(whitelist_enabled: boolean): Promise<void> {
+  await requestAdmin<Record<string, unknown>>('PUT', { whitelist_enabled });
+}
+
+export async function addAdminAccessEntry(
+  action: 'whitelist' | 'blacklist' | 'admin',
+  email: string,
+  reason?: string
+): Promise<void> {
+  await requestAdmin<Record<string, unknown>>('POST', { action, email, reason });
+}
+
+export async function removeAdminAccessEntry(
+  action: 'whitelist' | 'blacklist' | 'admin',
+  identifier: string
+): Promise<void> {
+  const params = new URLSearchParams({ action });
+  params.set(action === 'admin' ? 'user_id' : 'email', identifier);
+  await requestAdmin<Record<string, unknown>>('DELETE', undefined, params);
 }

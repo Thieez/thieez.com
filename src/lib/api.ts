@@ -9,6 +9,7 @@ export type AuthUser = {
   name?: string;
   email?: string;
   avatar_url?: string;
+  is_admin?: boolean;
   [key: string]: unknown;
 };
 

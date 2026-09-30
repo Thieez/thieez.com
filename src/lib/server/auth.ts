@@ -87,7 +87,7 @@ export async function getAccessToken(
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken, device_id: deviceId })
   });
-  if (response.status === 401) {
+  if (response.status === 401 || response.status === 403) {
     clearAuthCookies(cookies, url);
     return null;
   }
@@ -137,7 +137,7 @@ export async function getCurrentUser(
       'X-Device-Name': 'Thieez Website'
     }
   });
-  if (response.status === 401) {
+  if (response.status === 401 || response.status === 403) {
     const refreshedToken = await getAccessToken(cookies, url, fetcher, true);
     if (!refreshedToken) {
       clearAuthCookies(cookies, url);
@@ -151,14 +151,18 @@ export async function getCurrentUser(
         'X-Device-Name': 'Thieez Website'
       }
     });
-    if (response.status === 401) {
+    if (response.status === 401 || response.status === 403) {
       clearAuthCookies(cookies, url);
       return null;
     }
   }
+  if (response.status === 403) {
+    clearAuthCookies(cookies, url);
+    return null;
+  }
   if (!response.ok) throw new Error(`Auth API profile request failed (${response.status})`);
 
-  const payload = (await response.json()) as { user?: AuthUser };
+  const payload = (await response.json()) as { user?: AuthUser; is_admin?: boolean };
   if (!payload.user) throw new Error('Auth API returned no user profile');
 
   const refreshToken = cookies.get(REFRESH_COOKIE);
@@ -172,5 +176,8 @@ export async function getCurrentUser(
       maxAge: SESSION_INACTIVITY_DAYS * 24 * 60 * 60
     });
   }
-  return { accessToken: cookies.get(ACCESS_COOKIE) ?? accessToken, user: payload.user };
+  return {
+    accessToken: cookies.get(ACCESS_COOKIE) ?? accessToken,
+    user: { ...payload.user, is_admin: payload.is_admin === true }
+  };
 }

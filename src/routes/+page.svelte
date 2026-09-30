@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApiHealth, getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToProjectUpdates, type ApiHealth, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { getLisnntoLimits, logout, restoreAuth, startLogin, type AuthSession } from '$lib/auth-client';
+  import { addAdminAccessEntry, getAdminAccess, getLisnntoLimits, logout, removeAdminAccessEntry, restoreAuth, startLogin, updateWhitelistSetting, type AdminAccessData, type AuthSession } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -38,6 +38,14 @@
   let authLoading = true;
   let profileMenuOpen = false;
   let accountOpen = false;
+  let adminOpen = false;
+  let adminAccess: AdminAccessData | null = null;
+  let adminLoading = false;
+  let adminError = '';
+  let adminMessage = '';
+  let adminEmail = '';
+  let adminReason = '';
+  let adminAction: 'whitelist' | 'blacklist' | 'admin' = 'whitelist';
   let limits: LisnntoLimits | null = null;
   let limitsLoading = false;
   let limitsError = '';
@@ -234,6 +242,7 @@
   const handleLogout = async () => {
     profileMenuOpen = false;
     accountOpen = false;
+    adminOpen = false;
     try {
       await logout();
     } finally {
@@ -244,8 +253,31 @@
     }
   };
 
+  const toggleProfileMenu = async (event: MouseEvent) => {
+    event.stopPropagation();
+    if (profileMenuOpen) {
+      profileMenuOpen = false;
+      return;
+    }
+    try {
+      const session = await restoreAuth();
+      authSession = session;
+      if (session?.user?.is_admin !== true) {
+        adminOpen = false;
+        adminAccess = null;
+      }
+      profileMenuOpen = Boolean(session);
+    } catch {
+      authSession = null;
+      adminOpen = false;
+      adminAccess = null;
+      profileMenuOpen = false;
+    }
+  };
+
   const openAccount = async () => {
     profileMenuOpen = false;
+    adminOpen = false;
     accountOpen = true;
     if (!authSession || limits || limitsLoading) return;
     limitsLoading = true;
@@ -256,6 +288,76 @@
       limitsError = cause instanceof Error ? cause.message : 'Could not load Lisnnto limits.';
     } finally {
       limitsLoading = false;
+    }
+  };
+
+  const refreshAdminAccess = async () => {
+    adminLoading = true;
+    adminError = '';
+    try {
+      adminAccess = await getAdminAccess();
+    } catch (cause) {
+      adminError = cause instanceof Error ? cause.message : 'Could not load access settings.';
+    } finally {
+      adminLoading = false;
+    }
+  };
+
+  const openAdmin = () => {
+    profileMenuOpen = false;
+    accountOpen = false;
+    if (authSession?.user?.is_admin !== true) return;
+    adminOpen = true;
+    adminMessage = '';
+    void refreshAdminAccess();
+  };
+
+  const saveWhitelistSetting = async (enabled: boolean) => {
+    adminError = '';
+    adminMessage = '';
+    try {
+      await updateWhitelistSetting(enabled);
+      if (adminAccess) adminAccess = { ...adminAccess, whitelist_enabled: enabled };
+      adminMessage = 'Whitelist setting saved.';
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Could not update whitelist setting.';
+      await refreshAdminAccess();
+      adminError = message;
+    }
+  };
+
+  const addAccessEntry = async (event: SubmitEvent) => {
+    event.preventDefault();
+    adminError = '';
+    adminMessage = '';
+    try {
+      await addAdminAccessEntry(adminAction, adminEmail, adminReason);
+      adminEmail = '';
+      adminReason = '';
+      adminMessage = adminAction === 'admin' ? 'Administrator permission granted.' : 'Access list updated.';
+      await refreshAdminAccess();
+    } catch (cause) {
+      adminError = cause instanceof Error ? cause.message : 'Could not update user access.';
+    }
+  };
+
+  const removeAccessEntry = async (action: 'whitelist' | 'blacklist' | 'admin', identifier: string) => {
+    adminError = '';
+    adminMessage = '';
+    try {
+      await removeAdminAccessEntry(action, identifier);
+      adminMessage = action === 'admin' ? 'Administrator permission removed.' : 'User removed from the list.';
+      if (action === 'admin' && identifier === authSession?.user?.id) {
+        authSession = await restoreAuth();
+        if (authSession?.user?.is_admin !== true) {
+          adminOpen = false;
+          adminAccess = null;
+          return;
+        }
+      }
+      await refreshAdminAccess();
+    } catch (cause) {
+      adminError = cause instanceof Error ? cause.message : 'Could not remove user access.';
     }
   };
 
@@ -409,7 +511,7 @@
               class:profile-button-open={profileMenuOpen}
               aria-label={`Open profile menu for ${userLabel}`}
               aria-expanded={profileMenuOpen}
-              onclick={(event) => { event.stopPropagation(); profileMenuOpen = !profileMenuOpen; }}
+              onclick={toggleProfileMenu}
             >
               {#if avatarUrl}
                 <img src={avatarUrl} alt="" class="profile-avatar" />
@@ -428,6 +530,11 @@
                 <button class="profile-dropdown-item" onclick={openAccount}>
                   <span>Account</span><span aria-hidden="true">↗</span>
                 </button>
+                {#if authSession.user?.is_admin === true}
+                  <button class="profile-dropdown-item" onclick={openAdmin}>
+                    <span>Admin</span><span aria-hidden="true">↗</span>
+                  </button>
+                {/if}
                 <button class="profile-dropdown-item profile-dropdown-logout" onclick={handleLogout}>
                   <span>Log out</span><span aria-hidden="true">↗</span>
                 </button>
@@ -447,7 +554,92 @@
   {/if}
 
   <main class="main-content">
-    {#if accountOpen}
+    {#if adminOpen}
+      <section class="account-view admin-view" aria-labelledby="admin-heading">
+        <div class="account-topline">
+          <p class="eyebrow">THIEEZ / ADMIN</p>
+          <button class="text-button" onclick={() => adminOpen = false}>Close <span aria-hidden="true">×</span></button>
+        </div>
+        <h1 id="admin-heading">Access <em>control.</em></h1>
+        <p class="lede">Manage API access and administrator permissions. Changes take effect immediately.</p>
+        {#if adminError}
+          <div class="state-panel error-panel admin-feedback" role="alert">
+            <strong>Couldn’t update access settings.</strong><span>{adminError}</span>
+            <button class="text-button" onclick={refreshAdminAccess}>Try again</button>
+          </div>
+        {:else if adminMessage}
+          <div class="state-panel admin-feedback" role="status">{adminMessage}</div>
+        {/if}
+        {#if adminLoading && !adminAccess}
+          <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading access settings…</span></div>
+        {:else if adminAccess}
+          <label class="admin-toggle">
+            <span><strong>Require whitelist</strong><small>Only listed accounts and administrators can access authenticated API features.</small></span>
+            <input
+              type="checkbox"
+              checked={adminAccess.whitelist_enabled}
+              onchange={(event) => void saveWhitelistSetting(event.currentTarget.checked)}
+            />
+          </label>
+          <form class="admin-entry-form" onsubmit={addAccessEntry}>
+            <label>
+              <span>Email address</span>
+              <input type="email" bind:value={adminEmail} required autocomplete="off" placeholder="person@example.com" />
+            </label>
+            <label>
+              <span>Permission</span>
+              <select bind:value={adminAction}>
+                <option value="whitelist">Add to whitelist</option>
+                <option value="blacklist">Add to blacklist</option>
+                <option value="admin">Grant administrator</option>
+              </select>
+            </label>
+            {#if adminAction !== 'admin'}
+              <label>
+                <span>Reason <small>(optional)</small></span>
+                <input type="text" bind:value={adminReason} maxlength="500" placeholder="Internal note" />
+              </label>
+            {/if}
+            <button class="admin-submit" type="submit">Save permission <span aria-hidden="true">↗</span></button>
+          </form>
+          <div class="admin-lists">
+            <section>
+              <div class="section-heading"><h2>Whitelist</h2><span>{adminAccess.whitelist.length} accounts</span></div>
+              {#if adminAccess.whitelist.length}
+                {#each adminAccess.whitelist as entry (entry.email)}
+                  <div class="admin-list-row">
+                    <span><strong>{entry.email}</strong>{#if entry.reason}<small>{entry.reason}</small>{/if}</span>
+                    <button class="text-button" onclick={() => void removeAccessEntry('whitelist', entry.email)}>Remove</button>
+                  </div>
+                {/each}
+              {:else}<p class="admin-empty">No accounts listed.</p>{/if}
+            </section>
+            <section>
+              <div class="section-heading"><h2>Blacklist</h2><span>{adminAccess.blacklist.length} accounts</span></div>
+              {#if adminAccess.blacklist.length}
+                {#each adminAccess.blacklist as entry (entry.email)}
+                  <div class="admin-list-row">
+                    <span><strong>{entry.email}</strong>{#if entry.reason}<small>{entry.reason}</small>{/if}</span>
+                    <button class="text-button" onclick={() => void removeAccessEntry('blacklist', entry.email)}>Remove</button>
+                  </div>
+                {/each}
+              {:else}<p class="admin-empty">No accounts listed.</p>{/if}
+            </section>
+            <section>
+              <div class="section-heading"><h2>Administrators</h2><span>{adminAccess.admins.length} assigned</span></div>
+              {#if adminAccess.admins.length}
+                {#each adminAccess.admins as admin (admin.user_id)}
+                  <div class="admin-list-row">
+                    <span><strong>{admin.email || admin.user_id}</strong>{#if admin.name}<small>{admin.name}</small>{/if}</span>
+                    <button class="text-button" onclick={() => void removeAccessEntry('admin', admin.user_id)}>Revoke</button>
+                  </div>
+                {/each}
+              {:else}<p class="admin-empty">No database-assigned administrators.</p>{/if}
+            </section>
+          </div>
+        {/if}
+      </section>
+    {:else if accountOpen}
       <section class="account-view" aria-labelledby="account-heading">
         <div class="account-topline">
           <p class="eyebrow">THIEEZ / ACCOUNT</p>
