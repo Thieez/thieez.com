@@ -532,7 +532,7 @@
                 </button>
                 {#if authSession.user?.is_admin === true}
                   <button class="profile-dropdown-item" onclick={openAdmin}>
-                    <span>Admin</span><span aria-hidden="true">↗</span>
+                    <span>Dashboard</span><span aria-hidden="true">↗</span>
                   </button>
                 {/if}
                 <button class="profile-dropdown-item profile-dropdown-logout" onclick={handleLogout}>
@@ -557,7 +557,7 @@
     {#if adminOpen}
       <section class="account-view admin-view" aria-labelledby="admin-heading">
         <div class="account-topline">
-          <p class="eyebrow">THIEEZ / ADMIN</p>
+          <p class="eyebrow">THIEEZ / DASHBOARD</p>
           <button class="text-button" onclick={() => adminOpen = false}>Close <span aria-hidden="true">×</span></button>
         </div>
         <h1 id="admin-heading">Access <em>control.</em></h1>
