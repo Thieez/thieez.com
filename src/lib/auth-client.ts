@@ -18,6 +18,12 @@ export type AdminAccessData = {
   whitelist: AdminAccessEntry[];
   blacklist: AdminAccessEntry[];
   admins: Array<{ user_id: string; email: string | null; name: string | null }>;
+  online_users: Array<{
+    user_id: string;
+    email: string | null;
+    name: string | null;
+    last_active_at: string;
+  }>;
 };
 
 async function request(path: string, init?: RequestInit): Promise<Response> {
@@ -100,6 +106,13 @@ export async function addAdminAccessEntry(
   reason?: string
 ): Promise<void> {
   await requestAdmin<Record<string, unknown>>('POST', { action, email, reason });
+}
+
+export async function kickAdminUser(user_id: string, blacklist = false): Promise<void> {
+  await requestAdmin<Record<string, unknown>>('POST', {
+    action: blacklist ? 'blacklist_user' : 'kick',
+    user_id
+  });
 }
 
 export async function removeAdminAccessEntry(

@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApiHealth, getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToProjectUpdates, type ApiHealth, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { addAdminAccessEntry, getAdminAccess, getLisnntoLimits, logout, removeAdminAccessEntry, restoreAuth, startLogin, updateWhitelistSetting, type AdminAccessData, type AuthSession } from '$lib/auth-client';
+  import { addAdminAccessEntry, getAdminAccess, getLisnntoLimits, kickAdminUser, logout, removeAdminAccessEntry, restoreAuth, startLogin, updateWhitelistSetting, type AdminAccessData, type AuthSession } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -361,6 +361,22 @@
     }
   };
 
+  const kickOnlineUser = async (userId: string, blacklist = false) => {
+    const actionLabel = blacklist ? 'blacklist and sign out' : 'sign out';
+    if (!window.confirm(`Are you sure you want to ${actionLabel} this user?`)) return;
+    adminError = '';
+    adminMessage = '';
+    try {
+      await kickAdminUser(userId, blacklist);
+      adminMessage = blacklist
+        ? 'User added to the blacklist and signed out.'
+        : 'User signed out from all devices.';
+      await refreshAdminAccess();
+    } catch (cause) {
+      adminError = cause instanceof Error ? cause.message : 'Could not sign out user.';
+    }
+  };
+
   const closeMenus = (event: MouseEvent) => {
     if (event.target instanceof Element && event.target.closest('.profile-menu')) return;
     profileMenuOpen = false;
@@ -603,6 +619,33 @@
             <button class="admin-submit" type="submit">Save permission <span aria-hidden="true">↗</span></button>
           </form>
           <div class="admin-lists">
+            <section class="admin-online-section">
+              <div class="section-heading">
+                <h2>Online users</h2>
+                <span>{adminAccess.online_users.length} active</span>
+                <button class="text-button" onclick={refreshAdminAccess}>Refresh</button>
+              </div>
+              {#if adminAccess.online_users.length}
+                {#each adminAccess.online_users as onlineUser (onlineUser.user_id)}
+                  <div class="admin-list-row">
+                    <span>
+                      <strong>{onlineUser.email || onlineUser.user_id}</strong>
+                      <small>
+                        {onlineUser.name ? `${onlineUser.name} · ` : ''}Active {new Intl.DateTimeFormat('en', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(onlineUser.last_active_at))}
+                      </small>
+                    </span>
+                    {#if onlineUser.user_id !== authSession?.user?.id}
+                      <div class="admin-online-actions">
+                        <button class="text-button" onclick={() => void kickOnlineUser(onlineUser.user_id)}>Kick</button>
+                        <button class="text-button admin-block-button" onclick={() => void kickOnlineUser(onlineUser.user_id, true)}>Blacklist + kick</button>
+                      </div>
+                    {:else}
+                      <span class="admin-self-label">You</span>
+                    {/if}
+                  </div>
+                {/each}
+              {:else}<p class="admin-empty">No users are online.</p>{/if}
+            </section>
             <section>
               <div class="section-heading"><h2>Whitelist</h2><span>{adminAccess.whitelist.length} accounts</span></div>
               {#if adminAccess.whitelist.length}
