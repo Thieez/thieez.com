@@ -900,6 +900,17 @@
               <svg viewBox="0 0 1200 120" preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat from ${healthPointLabel(visibleHeartbeatPoints[0])} to ${healthPointLabel(visibleHeartbeatPoints.at(-1)!)}; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
                 {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
                   <path
+                    class="heartbeat-trace-base"
+                    class:heartbeat-trace-up={trace.status === 'up'}
+                    class:heartbeat-trace-down={trace.status === 'down'}
+                    class:heartbeat-trace-paused={trace.status === 'paused'}
+                    class:heartbeat-trace-unknown={trace.status === 'unknown'}
+                    d={trace.path}
+                  />
+                {/each}
+                {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
+                  <path
+                    class="heartbeat-trace-sweep"
                     class:heartbeat-trace-up={trace.status === 'up'}
                     class:heartbeat-trace-down={trace.status === 'down'}
                     class:heartbeat-trace-paused={trace.status === 'paused'}
