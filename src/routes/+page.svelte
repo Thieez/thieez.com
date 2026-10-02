@@ -58,6 +58,7 @@
   let storageLoading = false;
   let storageError = storage ? '' : data.storage?.error ?? '';
   let apiHealth: ApiHealth | null = data.apiHealth?.value ?? null;
+  let apiHealthResponding = Boolean(apiHealth && !data.apiHealth?.stale);
   let apiHealthLoading = false;
   let apiHealthError = apiHealth ? '' : data.apiHealth?.error ?? '';
   let healthRefreshTimer: number | undefined;
@@ -178,9 +179,11 @@
     if (!apiHealth) apiHealthLoading = true;
     try {
       apiHealth = await getApiHealth();
+      apiHealthResponding = true;
       apiHealthError = '';
       markStale('heartbeat', false);
     } catch (cause) {
+      apiHealthResponding = false;
       if (apiHealth) {
         markStale('heartbeat', true);
       } else {
@@ -914,6 +917,13 @@
           <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking API health…</span></div>
         {:else if apiHealthError}
           <div class="state-panel error-panel" role="alert"><strong>API health is unavailable.</strong><span>{apiHealthError}</span></div>
+          <div class="heartbeat-card">
+            <div class="heartbeat-monitor" use:observeHeartbeatMonitor>
+              <svg viewBox={`0 0 ${heartbeatMonitorWidth} 120`} preserveAspectRatio="none" role="img" aria-label="API heartbeat unavailable; connection status is unknown">
+                <path class="heartbeat-trace-unknown" d={`M0 60 H${heartbeatMonitorWidth}`} />
+              </svg>
+            </div>
+          </div>
         {:else if apiHealth}
           {@const pageCount = heartbeatPageCount(apiHealth.points, apiHealth.interval_seconds)}
           {@const selectedPage = Math.min(heartbeatPage, pageCount - 1)}
@@ -939,6 +949,7 @@
             </div>
             <div class="heartbeat-monitor" use:observeHeartbeatMonitor>
               <svg viewBox={`0 0 ${heartbeatMonitorWidth} 120`} preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat from ${healthPointLabel(visibleHeartbeatPoints[0])} to ${healthPointLabel(visibleHeartbeatPoints.at(-1)!)}; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
+                {#if apiHealthResponding}
                 <defs>
                   <linearGradient id="heartbeat-sweep-gradient">
                     <stop offset="0%" stop-color="white" />
@@ -986,6 +997,9 @@
                   {/each}
                 </g>
                 <circle class:heartbeat-ping-down={apiHealth.current_status === 'down'} cx={heartbeatMonitorWidth - 4} cy="60" r="3"></circle>
+                {:else}
+                  <path class="heartbeat-trace-unknown" d={`M0 60 H${heartbeatMonitorWidth}`} />
+                {/if}
               </svg>
             </div>
             <div class="heartbeat-legend">
