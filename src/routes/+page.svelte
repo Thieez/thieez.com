@@ -10,6 +10,8 @@
   let isLisnnto = data.isLisnnto;
   let isNote = data.isNote;
   let projectName = data.projectName;
+  let accessDenied = data.accessDenied;
+  let accessCheckFailed = data.accessCheckFailed;
   let projects: Project[] = data.projects?.value?.projects ?? [];
   let build: LatestBuild | null = data.build?.value ?? null;
   let loading = false;
@@ -983,6 +985,18 @@
           <h2 id="projects-heading">Selected work</h2>
           <span>{projects.length.toString().padStart(2, '0')} projects</span>
         </div>
+        {#if accessDenied}
+          <div class="state-panel error-panel" role="status">
+            <strong>You don’t have access to this project.</strong>
+            <span>{accessDenied.replaceAll('-', ' ')}</span>
+            <button class="text-button" onclick={startLogin}>Sign in <span aria-hidden="true">↗</span></button>
+          </div>
+        {:else if accessCheckFailed}
+          <div class="state-panel error-panel" role="alert">
+            <strong>Couldn’t check project access.</strong>
+            <span>Please try again in a moment.</span>
+          </div>
+        {/if}
         {#if loading}
           <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading the index…</span></div>
         {:else if projectError}
@@ -990,7 +1004,7 @@
         {:else if projects.length}
           <div class="project-list">
             {#each projects as project, index}
-              <a class="project-row" href={project.href}>
+              <a class="project-row" href={`/projects/${encodeURIComponent(project.slug)}`}>
                 <span class="project-number">{String(index + 1).padStart(2, '0')}</span>
                 <span class="project-copy"><strong>{project.name}</strong><span>{project.description}</span></span>
                 <span class="project-meta"><span>{project.status}</span><span>{project.meta}</span></span>

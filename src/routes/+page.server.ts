@@ -63,10 +63,16 @@ async function fetchJson<T>(fetcher: typeof fetch, path: string): Promise<T> {
 }
 
 export const load: PageServerLoad = async ({ fetch, setHeaders, url }) => {
-  setHeaders({
-    'cache-control':
-      'public, max-age=0, s-maxage=60, stale-while-revalidate=86400, stale-if-error=86400'
-  });
+  const accessDenied = url.searchParams.get('access_denied');
+  const accessCheckFailed = url.searchParams.has('access_check_failed');
+  setHeaders(
+    accessDenied || accessCheckFailed
+      ? { 'cache-control': 'no-store' }
+      : {
+          'cache-control':
+            'public, max-age=0, s-maxage=60, stale-while-revalidate=86400, stale-if-error=86400'
+        }
+  );
 
   const hostProject = url.hostname.toLowerCase().endsWith('.thieez.com')
     ? url.hostname.slice(0, -'.thieez.com'.length)
@@ -113,7 +119,9 @@ export const load: PageServerLoad = async ({ fetch, setHeaders, url }) => {
       projects: null,
       apiHealth: null,
       storage: null,
-      renderLimits: null
+      renderLimits: null,
+      accessDenied,
+      accessCheckFailed
     };
   }
 
@@ -149,6 +157,8 @@ export const load: PageServerLoad = async ({ fetch, setHeaders, url }) => {
     projects,
     apiHealth,
     storage,
-    renderLimits
+    renderLimits,
+    accessDenied,
+    accessCheckFailed
   };
 };
