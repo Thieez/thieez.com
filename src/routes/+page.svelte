@@ -63,10 +63,20 @@
   let healthRefreshTimer: number | undefined;
   let authRefreshTimer: number | undefined;
   let heartbeatPage = 0;
-  let heartbeatViewportWidth = 1200;
+  let heartbeatMonitorWidth = 1200;
   let renderLimits: RenderLimits | null = data.renderLimits?.value ?? null;
   let renderLimitsLoading = false;
   let renderLimitsError = renderLimits ? '' : data.renderLimits?.error ?? '';
+
+  const observeHeartbeatMonitor = (node: HTMLDivElement) => {
+    const updateWidth = () => {
+      heartbeatMonitorWidth = Math.max(1, Math.round(node.getBoundingClientRect().width));
+    };
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(node);
+    updateWidth();
+    return { destroy: () => observer.disconnect() };
+  };
 
   const detectExperience = () => {
     if (!browser) return;
@@ -191,11 +201,6 @@
   onMount(() => {
     document.addEventListener('click', closeMenus);
     document.addEventListener('keydown', handleDocumentKeydown);
-    const updateHeartbeatViewportWidth = () => {
-      heartbeatViewportWidth = window.innerWidth;
-    };
-    updateHeartbeatViewportWidth();
-    window.addEventListener('resize', updateHeartbeatViewportWidth);
     for (const [resource, result] of initialCacheResults) {
       if (
         result?.updatedAt &&
@@ -259,7 +264,6 @@
       if (authRefreshTimer !== undefined) window.clearInterval(authRefreshTimer);
       document.removeEventListener('click', closeMenus);
       document.removeEventListener('keydown', handleDocumentKeydown);
-      window.removeEventListener('resize', updateHeartbeatViewportWidth);
     };
   });
 
@@ -520,6 +524,8 @@
   const healthPointLabel = (point: ApiHealth['points'][number]): string =>
     `${healthTimestampFormat.format(new Date(point.timestamp))}: ${healthStatusLabel(point.status)}`;
 
+  const heartbeatAnimationDuration = (heartbeatMonitorWidth / 150).toFixed(2);
+
   const heartbeatPageSize = (intervalSeconds: number): number =>
     Math.max(1, Math.floor(60 * 60 / Math.max(intervalSeconds, 60)));
 
@@ -538,12 +544,12 @@
 
   const heartbeatTraces = (
     points: ApiHealth['points'],
-    viewportWidth: number
+    monitorWidth: number
   ): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
     const traces: Array<{ status: ApiHealth['points'][number]['status']; path: string }> = [];
-    const cycleWidth = 1200 / points.length;
+    const cycleWidth = monitorWidth / points.length;
     const upPointIndices = points.flatMap((point, index) => point.status === 'up' ? [index] : []);
-    const peakCount = Math.min(upPointIndices.length, Math.max(1, Math.floor(viewportWidth / 180)));
+    const peakCount = Math.min(upPointIndices.length, Math.max(1, Math.floor(monitorWidth / 180)));
     const peakIndices = new Set(
       Array.from({ length: peakCount }, (_, index) =>
         upPointIndices[Math.floor((index + 0.5) * upPointIndices.length / peakCount)]
@@ -564,9 +570,12 @@
     return traces;
   };
 
-  const heartbeatBaselines = (points: ApiHealth['points']): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
+  const heartbeatBaselines = (
+    points: ApiHealth['points'],
+    monitorWidth: number
+  ): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
     const traces: Array<{ status: ApiHealth['points'][number]['status']; path: string }> = [];
-    const cycleWidth = 1200 / points.length;
+    const cycleWidth = monitorWidth / points.length;
     for (const [index, point] of points.entries()) {
       const x = index * cycleWidth;
       let trace = traces.at(-1);
@@ -928,33 +937,33 @@
                 <strong>{Math.round(apiHealth.interval_seconds / 60)} min</strong>
               </div>
             </div>
-            <div class="heartbeat-monitor">
-              <svg viewBox="0 0 1200 120" preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat from ${healthPointLabel(visibleHeartbeatPoints[0])} to ${healthPointLabel(visibleHeartbeatPoints.at(-1)!)}; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
+            <div class="heartbeat-monitor" use:observeHeartbeatMonitor>
+              <svg viewBox={`0 0 ${heartbeatMonitorWidth} 120`} preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat from ${healthPointLabel(visibleHeartbeatPoints[0])} to ${healthPointLabel(visibleHeartbeatPoints.at(-1)!)}; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
                 <defs>
                   <linearGradient id="heartbeat-sweep-gradient">
                     <stop offset="0%" stop-color="white" />
                     <stop offset="100%" stop-color="white" />
                   </linearGradient>
-                  <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
-                    <rect width="1200" height="120" fill="black" />
-                    <rect y="0" width="600" height="120" fill="url(#heartbeat-sweep-gradient)">
-                      <animate attributeName="x" from="0" to="1200" dur="8s" repeatCount="indefinite" />
+                  <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={heartbeatMonitorWidth} height="120">
+                    <rect width={heartbeatMonitorWidth} height="120" fill="black" />
+                    <rect y="0" width={heartbeatMonitorWidth / 2} height="120" fill="url(#heartbeat-sweep-gradient)">
+                      <animate attributeName="x" from="0" to={heartbeatMonitorWidth} dur={`${heartbeatAnimationDuration}s`} repeatCount="indefinite" />
                     </rect>
-                    <rect y="0" width="600" height="120" fill="url(#heartbeat-sweep-gradient)">
-                      <animate attributeName="x" from="-1200" to="0" dur="8s" repeatCount="indefinite" />
+                    <rect y="0" width={heartbeatMonitorWidth / 2} height="120" fill="url(#heartbeat-sweep-gradient)">
+                      <animate attributeName="x" from={-heartbeatMonitorWidth} to="0" dur={`${heartbeatAnimationDuration}s`} repeatCount="indefinite" />
                     </rect>
                   </mask>
-                  <mask id="heartbeat-base-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
-                    <rect width="1200" height="120" fill="white" />
-                    <rect y="0" width="600" height="120" fill="black">
-                      <animate attributeName="x" from="0" to="1200" dur="8s" repeatCount="indefinite" />
+                  <mask id="heartbeat-base-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={heartbeatMonitorWidth} height="120">
+                    <rect width={heartbeatMonitorWidth} height="120" fill="white" />
+                    <rect y="0" width={heartbeatMonitorWidth / 2} height="120" fill="black">
+                      <animate attributeName="x" from="0" to={heartbeatMonitorWidth} dur={`${heartbeatAnimationDuration}s`} repeatCount="indefinite" />
                     </rect>
-                    <rect y="0" width="600" height="120" fill="black">
-                      <animate attributeName="x" from="-1200" to="0" dur="8s" repeatCount="indefinite" />
+                    <rect y="0" width={heartbeatMonitorWidth / 2} height="120" fill="black">
+                      <animate attributeName="x" from={-heartbeatMonitorWidth} to="0" dur={`${heartbeatAnimationDuration}s`} repeatCount="indefinite" />
                     </rect>
                   </mask>
                 </defs>
-                {#each heartbeatBaselines(visibleHeartbeatPoints) as trace}
+                {#each heartbeatBaselines(visibleHeartbeatPoints, heartbeatMonitorWidth) as trace}
                   <path
                     class="heartbeat-trace-base"
                     mask="url(#heartbeat-base-mask)"
@@ -966,7 +975,7 @@
                   />
                 {/each}
                 <g class="heartbeat-trace-sweep" mask="url(#heartbeat-sweep-mask)">
-                  {#each heartbeatTraces(visibleHeartbeatPoints, heartbeatViewportWidth) as trace}
+                  {#each heartbeatTraces(visibleHeartbeatPoints, heartbeatMonitorWidth) as trace}
                     <path
                       class:heartbeat-trace-up={trace.status === 'up'}
                       class:heartbeat-trace-down={trace.status === 'down'}
@@ -976,7 +985,7 @@
                     />
                   {/each}
                 </g>
-                <circle class:heartbeat-ping-down={apiHealth.current_status === 'down'} cx="1196" cy="60" r="3"></circle>
+                <circle class:heartbeat-ping-down={apiHealth.current_status === 'down'} cx={heartbeatMonitorWidth - 4} cy="60" r="3"></circle>
               </svg>
             </div>
             <div class="heartbeat-legend">
