@@ -846,18 +846,8 @@
           <div class="heartbeat-monitor" use:observeHeartbeatMonitor aria-live="polite">
             <svg viewBox={`0 0 ${heartbeatMonitorWidth} 120`} preserveAspectRatio="none" role="img" aria-label={heartbeatConnection === 'connected' ? 'Live API heartbeat received directly over WebSocket' : heartbeatConnection === 'disconnected' ? 'No heartbeat; API WebSocket is unavailable' : 'Connecting directly to the API heartbeat'}>
               {#if heartbeatConnection === 'connected'}
-                <g class="heartbeat-signal-scroll" aria-hidden="true">
-                  {#if !prefersReducedMotion()}
-                    <animateTransform
-                      attributeName="transform"
-                      type="translate"
-                      from="0 0"
-                      to={`-${heartbeatCycleWidth} 0`}
-                      dur={`${heartbeatAnimationDuration}s`}
-                      repeatCount="indefinite"
-                    />
-                  {/if}
-                  <path class="heartbeat-trace-up" d={heartbeatSignalPath(heartbeatMonitorWidth)} />
+                <g class="heartbeat-signal" aria-hidden="true">
+                  <path class="heartbeat-trace-up heartbeat-trace-pulse" d={heartbeatSignalPath(heartbeatMonitorWidth)} />
                 </g>
               {:else}
                 {#if heartbeatConnection === 'disconnected'}
