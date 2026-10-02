@@ -1,6 +1,5 @@
 import { API_BASE } from '$lib/api';
 import type {
-  ApiHealth,
   DatabaseStorage,
   LatestBuild,
   PluginBuild,
@@ -97,7 +96,6 @@ export async function loadPageData(
       projectName,
       build: null,
       projects: null,
-      apiHealth: null,
       storage: null,
       renderLimits: null,
       accessDenied,
@@ -136,7 +134,6 @@ export async function loadPageData(
       projectName,
       build,
       projects: null,
-      apiHealth: null,
       storage: null,
       renderLimits: null,
       accessDenied,
@@ -145,7 +142,7 @@ export async function loadPageData(
     };
   }
 
-  const [projects, apiHealth, storage, renderLimits] = await Promise.all([
+  const [projects, storage, renderLimits] = await Promise.all([
     cached<ProjectResult>('projects', async () => {
       try {
         const payload = await fetchJson<Project[] | { projects?: Project[] }>(fetcher, '/projects/v0');
@@ -156,7 +153,6 @@ export async function loadPageData(
         throw cause;
       }
     }),
-    cached<ApiHealth>('api-health', () => fetchJson(fetcher, '/uptime/v0/health')),
     cached<DatabaseStorage>('database-storage', () => fetchJson(fetcher, '/lisnnto/v0/storage')),
     cached<RenderLimits>('render-limits', async () => {
       try {
@@ -175,7 +171,6 @@ export async function loadPageData(
     projectName,
     build: null,
     projects,
-    apiHealth,
     storage,
     renderLimits,
     accessDenied,

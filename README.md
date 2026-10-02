@@ -26,13 +26,16 @@ refreshes the list after a signed GitHub `Repository` webhook event.
 It also displays live Supabase database usage from the public
 `/lisnnto/v0/storage` endpoint.
 
-Public page data is loaded during server rendering and kept in a per-process
-cache for 60 seconds. The rendered page is also cached at the Vercel edge for
-60 seconds, with stale responses allowed during revalidation for up to 24
-hours. If the API is unavailable, the site serves the last successful data and
-labels it as potentially outdated; with no previous cache, it shows that data
-is unavailable instead of inventing a heartbeat line. The process cache itself
-is lost on server restart.
+The API heartbeat is a direct browser WebSocket connection to
+`/uptime/v0/heartbeat`; it does not use UptimeRobot. The API sends a heartbeat
+once per second, and the page reconnects if the connection is lost. While
+disconnected, the graph shows an animated red flatline and reports that there
+is no heartbeat.
+
+Other public page data is loaded during server rendering and kept in a
+per-process cache for 60 seconds. The rendered page is also cached at the
+Vercel edge for 60 seconds, with stale responses allowed during revalidation
+for up to 24 hours. The process cache itself is lost on server restart.
 
 The header also supports Google login through the same OAuth flow as the
 Obsidian plugin (`/auth/v0/login`). The website receives the OAuth callback on

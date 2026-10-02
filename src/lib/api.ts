@@ -51,19 +51,7 @@ export type DatabaseStorage = {
   usage_ratio: number;
 };
 
-export type ApiHealthPoint = {
-  timestamp: string;
-  status: 'up' | 'down' | 'paused' | 'unknown';
-};
-
-export type ApiHealth = {
-  monitor: { id: number; name: string };
-  current_status: ApiHealthPoint['status'];
-  uptime_percent: number;
-  interval_seconds: number;
-  generated_at: string;
-  points: ApiHealthPoint[];
-};
+export type ApiHeartbeatConnection = 'connecting' | 'connected' | 'disconnected';
 
 export type RenderMetricSeries = {
   labels?: Array<{ field?: string; value?: string }>;
@@ -174,10 +162,6 @@ export async function getDatabaseStorage(): Promise<DatabaseStorage> {
   return fetchJson<DatabaseStorage>('/lisnnto/v0/storage');
 }
 
-export async function getApiHealth(): Promise<ApiHealth> {
-  return fetchJson<ApiHealth>('/uptime/v0/health');
-}
-
 export async function getRenderLimits(): Promise<RenderLimits> {
   try {
     return await fetchJson<RenderLimits>('/render/v0/limits');
@@ -206,6 +190,97 @@ export function subscribeToProjectUpdates(onUpdate: () => void): () => void {
   return () => {
     socket.removeEventListener('message', handleMessage);
     socket.close();
+  };
+}
+
+export function subscribeToApiHeartbeat(
+  onConnectionChange: (connection: ApiHeartbeatConnection) => void
+): () => void {
+  if (!isBrowser()) return () => undefined;
+
+  let stopped = false;
+  let socket: WebSocket | undefined;
+  let reconnectTimer: number | undefined;
+  let heartbeatTimer: number | undefined;
+  let reconnectDelay = 1000;
+  let connection: ApiHeartbeatConnection = 'connecting';
+
+  const setConnection = (next: ApiHeartbeatConnection) => {
+    if (connection === next) return;
+    connection = next;
+    onConnectionChange(next);
+  };
+
+  const connect = () => {
+    if (stopped) return;
+    setConnection('connecting');
+
+    const stopHeartbeatTimeout = () => {
+      if (heartbeatTimer !== undefined) {
+        window.clearTimeout(heartbeatTimer);
+        heartbeatTimer = undefined;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (stopped || reconnectTimer !== undefined) return;
+      setConnection('disconnected');
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = undefined;
+        setConnection('connecting');
+        connect();
+      }, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 15_000);
+    };
+
+    let currentSocket: WebSocket;
+    try {
+      currentSocket = new WebSocket(
+        `${API_BASE.replace(/^http/, 'ws')}/uptime/v0/heartbeat`
+      );
+    } catch {
+      scheduleReconnect();
+      return;
+    }
+    socket = currentSocket;
+
+    const startHeartbeatTimeout = () => {
+      stopHeartbeatTimeout();
+      heartbeatTimer = window.setTimeout(() => currentSocket.close(), 5000);
+    };
+
+    currentSocket.addEventListener('open', () => {
+      if (socket !== currentSocket || stopped) return;
+      reconnectDelay = 1000;
+      startHeartbeatTimeout();
+    });
+    currentSocket.addEventListener('message', (event: MessageEvent<string>) => {
+      if (socket !== currentSocket || stopped) return;
+      try {
+        const message = JSON.parse(event.data) as { type?: string; timestamp?: string };
+        if (message.type !== 'heartbeat') return;
+        if (typeof message.timestamp !== 'string' || Number.isNaN(Date.parse(message.timestamp))) return;
+        setConnection('connected');
+        startHeartbeatTimeout();
+      } catch {
+        // Ignore malformed messages; the heartbeat timeout will mark the connection unavailable.
+      }
+    });
+    currentSocket.addEventListener('close', () => {
+      if (socket !== currentSocket || stopped) return;
+      stopHeartbeatTimeout();
+      scheduleReconnect();
+    });
+    currentSocket.addEventListener('error', () => currentSocket.close());
+    startHeartbeatTimeout();
+  };
+
+  connect();
+  return () => {
+    stopped = true;
+    if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+    if (heartbeatTimer !== undefined) window.clearTimeout(heartbeatTimer);
+    socket?.close();
   };
 }
 

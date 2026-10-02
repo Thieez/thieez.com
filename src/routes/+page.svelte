@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
-  import { getApiHealth, getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToProjectUpdates, type ApiHealth, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
+  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
   import { addAdminAccessEntry, getAdminAccess, getLisnntoLimits, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, restoreAuth, revokeAdminAppAccess, startLogin, updateWhitelistSetting, type AdminAccessData, type AuthSession } from '$lib/auth-client';
 
   export let data: PageData;
@@ -29,7 +29,6 @@
   > = [
     ['build', data.build],
     ['projects', data.projects],
-    ['heartbeat', data.apiHealth],
     ['storage', data.storage],
     ['render', data.renderLimits]
   ];
@@ -57,13 +56,8 @@
   let storage: DatabaseStorage | null = data.storage?.value ?? null;
   let storageLoading = false;
   let storageError = storage ? '' : data.storage?.error ?? '';
-  let apiHealth: ApiHealth | null = data.apiHealth?.value ?? null;
-  let apiHealthResponding = Boolean(apiHealth && !data.apiHealth?.stale);
-  let apiHealthLoading = false;
-  let apiHealthError = apiHealth ? '' : data.apiHealth?.error ?? '';
-  let healthRefreshTimer: number | undefined;
   let authRefreshTimer: number | undefined;
-  let heartbeatPage = 0;
+  let heartbeatConnection: ApiHeartbeatConnection = 'connecting';
   let heartbeatMonitorWidth = 1200;
   let renderLimits: RenderLimits | null = data.renderLimits?.value ?? null;
   let renderLimitsLoading = false;
@@ -126,11 +120,8 @@
     } else {
       storageLoading = storage === null;
       storageError = '';
-      if (!apiHealth) apiHealthLoading = true;
-      apiHealthError = '';
       renderLimitsLoading = renderLimits === null;
       renderLimitsError = '';
-      void refreshApiHealth();
       void getDatabaseStorage()
         .then((result) => {
           storage = result;
@@ -175,25 +166,6 @@
     loading = false;
   };
 
-  const refreshApiHealth = async () => {
-    if (!apiHealth) apiHealthLoading = true;
-    try {
-      apiHealth = await getApiHealth();
-      apiHealthResponding = true;
-      apiHealthError = '';
-      markStale('heartbeat', false);
-    } catch (cause) {
-      apiHealthResponding = false;
-      if (apiHealth) {
-        markStale('heartbeat', true);
-      } else {
-        apiHealthError = cause instanceof Error ? cause.message : 'API health could not be loaded.';
-      }
-    } finally {
-      apiHealthLoading = false;
-    }
-  };
-
   const markStale = (resource: string, stale: boolean) => {
     const resources = new Set(staleDataResources);
     if (stale) resources.add(resource);
@@ -212,7 +184,13 @@
         markStale(resource, true);
       }
     }
-    let unsubscribe: () => void = () => undefined;
+    let unsubscribeProjects: () => void = () => undefined;
+    let unsubscribeHeartbeat: () => void = () => undefined;
+    if (!isLisnnto && !isNote) {
+      unsubscribeHeartbeat = subscribeToApiHeartbeat((connection) => {
+        heartbeatConnection = connection;
+      });
+    }
     void (async () => {
       const authTask = restoreAuth()
         .then((session) => {
@@ -252,18 +230,15 @@
       await authTask;
 
       if (!isLisnnto && !isNote) {
-        healthRefreshTimer = window.setInterval(() => {
-          void refreshApiHealth();
-        }, 5 * 60 * 1000);
-        unsubscribe = subscribeToProjectUpdates(() => {
+        unsubscribeProjects = subscribeToProjectUpdates(() => {
           void load();
         });
       }
     })();
 
     return () => {
-      unsubscribe();
-      if (healthRefreshTimer !== undefined) window.clearInterval(healthRefreshTimer);
+      unsubscribeProjects();
+      unsubscribeHeartbeat();
       if (authRefreshTimer !== undefined) window.clearInterval(authRefreshTimer);
       document.removeEventListener('click', closeMenus);
       document.removeEventListener('keydown', handleDocumentKeydown);
@@ -516,79 +491,18 @@
   const availableMetricDefinitions = (): typeof metricDefinitions =>
     metricDefinitions.filter((definition) => metricPoints(definition.name, definition.aggregate).length > 0);
 
-  const healthStatusLabel = (status: ApiHealth['current_status']): string => ({
-    up: 'Operational',
-    down: 'Down',
-    paused: 'Paused',
-    unknown: 'Unknown'
-  })[status];
+  const heartbeatCycleWidth = 160;
+  const heartbeatAnimationDuration = (heartbeatCycleWidth / 150).toFixed(2);
+  const prefersReducedMotion = () => browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const healthTimestampFormat = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' });
-  const healthPointLabel = (point: ApiHealth['points'][number]): string =>
-    `${healthTimestampFormat.format(new Date(point.timestamp))}: ${healthStatusLabel(point.status)}`;
-
-  const heartbeatAnimationDuration = (heartbeatMonitorWidth / 150).toFixed(2);
-
-  const heartbeatPageSize = (intervalSeconds: number): number =>
-    Math.max(1, Math.floor(60 * 60 / Math.max(intervalSeconds, 60)));
-
-  const heartbeatPageCount = (points: ApiHealth['points'], intervalSeconds: number): number =>
-    Math.max(1, Math.ceil(points.length / heartbeatPageSize(intervalSeconds)));
-
-  const heartbeatPagePoints = (
-    points: ApiHealth['points'],
-    intervalSeconds: number,
-    page: number
-  ): ApiHealth['points'] => {
-    const size = heartbeatPageSize(intervalSeconds);
-    const end = Math.max(0, points.length - page * size);
-    return points.slice(Math.max(0, end - size), end);
-  };
-
-  const heartbeatTraces = (
-    points: ApiHealth['points'],
-    monitorWidth: number
-  ): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
-    const traces: Array<{ status: ApiHealth['points'][number]['status']; path: string }> = [];
-    const cycleWidth = monitorWidth / points.length;
-    const upPointIndices = points.flatMap((point, index) => point.status === 'up' ? [index] : []);
-    const peakCount = Math.min(upPointIndices.length, Math.max(1, Math.floor(monitorWidth / 180)));
-    const peakIndices = new Set(
-      Array.from({ length: peakCount }, (_, index) =>
-        upPointIndices[Math.floor((index + 0.5) * upPointIndices.length / peakCount)]
-      )
-    );
-    for (const [index, point] of points.entries()) {
-      const x = index * cycleWidth;
-      let trace = traces.at(-1);
-      if (!trace || trace.status !== point.status) {
-        trace = { status: point.status, path: '' };
-        traces.push(trace);
-      }
-      const beat = peakIndices.has(index)
-        ? `M${x.toFixed(2)} 60 H${(x + cycleWidth * 0.28).toFixed(2)} Q${(x + cycleWidth * 0.32).toFixed(2)} 60 ${(x + cycleWidth * 0.36).toFixed(2)} 54 H${(x + cycleWidth * 0.4).toFixed(2)} L${(x + cycleWidth * 0.46).toFixed(2)} 14 L${(x + cycleWidth * 0.52).toFixed(2)} 105 L${(x + cycleWidth * 0.58).toFixed(2)} 60 Q${(x + cycleWidth * 0.64).toFixed(2)} 60 ${(x + cycleWidth * 0.68).toFixed(2)} 53 Q${(x + cycleWidth * 0.72).toFixed(2)} 60 ${(x + cycleWidth * 0.78).toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`
-        : `M${x.toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`;
-      trace.path += `${trace.path ? ' ' : ''}${beat}`;
+  const heartbeatSignalPath = (monitorWidth: number): string => {
+    const beats: string[] = [];
+    for (let x = -heartbeatCycleWidth; x < monitorWidth + heartbeatCycleWidth; x += heartbeatCycleWidth) {
+      beats.push(
+        `M${x} 60 H${x + 38} Q${x + 44} 60 ${x + 48} 54 H${x + 54} L${x + 61} 14 L${x + 68} 105 L${x + 76} 60 Q${x + 82} 60 ${x + 88} 53 Q${x + 94} 60 ${x + 102} 60 H${x + heartbeatCycleWidth}`
+      );
     }
-    return traces;
-  };
-
-  const heartbeatBaselines = (
-    points: ApiHealth['points'],
-    monitorWidth: number
-  ): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
-    const traces: Array<{ status: ApiHealth['points'][number]['status']; path: string }> = [];
-    const cycleWidth = monitorWidth / points.length;
-    for (const [index, point] of points.entries()) {
-      const x = index * cycleWidth;
-      let trace = traces.at(-1);
-      if (!trace || trace.status !== point.status) {
-        trace = { status: point.status, path: '' };
-        traces.push(trace);
-      }
-      trace.path += `${trace.path ? ' ' : ''}M${x.toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`;
-    }
-    return traces;
+    return beats.join(' ');
   };
 
 </script>
@@ -913,124 +827,71 @@
         <div class="section-heading">
           <h2 id="health-heading">API heartbeat</h2>
         </div>
-        {#if apiHealthLoading}
-          <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking API health…</span></div>
-        {:else if apiHealthError}
-          <div class="state-panel error-panel" role="alert"><strong>API health is unavailable.</strong><span>{apiHealthError}</span></div>
-          <div class="heartbeat-card">
-            <div class="heartbeat-monitor" use:observeHeartbeatMonitor>
-              <svg viewBox={`0 0 ${heartbeatMonitorWidth} 120`} preserveAspectRatio="none" role="img" aria-label="API heartbeat unavailable; connection status is unknown">
-                <path class="heartbeat-trace-unknown" d={`M0 60 H${heartbeatMonitorWidth}`} />
-              </svg>
+        <div class="heartbeat-card">
+          <div class="heartbeat-summary" aria-live="polite" aria-atomic="true">
+            <div>
+              <span>API connection</span>
+              <strong
+                role="status"
+                class:heartbeat-status-up={heartbeatConnection === 'connected'}
+                class:heartbeat-status-down={heartbeatConnection === 'disconnected'}
+                class:heartbeat-status-paused={heartbeatConnection === 'connecting'}
+              >{heartbeatConnection === 'connected' ? 'Connected' : heartbeatConnection === 'disconnected' ? 'No heartbeat' : 'Connecting…'}</strong>
+            </div>
+            <div>
+              <span>Heartbeat source</span>
+              <strong>Direct API</strong>
             </div>
           </div>
-        {:else if apiHealth}
-          {@const pageCount = heartbeatPageCount(apiHealth.points, apiHealth.interval_seconds)}
-          {@const selectedPage = Math.min(heartbeatPage, pageCount - 1)}
-          {@const visibleHeartbeatPoints = heartbeatPagePoints(apiHealth.points, apiHealth.interval_seconds, selectedPage)}
-          <div class="heartbeat-card">
-            <div class="heartbeat-summary">
-              <div>
-                <span>Current status</span>
-                <strong
-                  class:heartbeat-status-up={apiHealth.current_status === 'up'}
-                  class:heartbeat-status-down={apiHealth.current_status === 'down'}
-                  class:heartbeat-status-paused={apiHealth.current_status === 'paused'}
-                >{healthStatusLabel(apiHealth.current_status)}</strong>
-              </div>
-              <div>
-                <span>Uptime · 24 hours</span>
-                <strong>{apiHealth.uptime_percent.toFixed(2)}%</strong>
-              </div>
-              <div>
-                <span>Check interval</span>
-                <strong>{Math.round(apiHealth.interval_seconds / 60)} min</strong>
-              </div>
-            </div>
-            <div class="heartbeat-monitor" use:observeHeartbeatMonitor>
-              <svg viewBox={`0 0 ${heartbeatMonitorWidth} 120`} preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat from ${healthPointLabel(visibleHeartbeatPoints[0])} to ${healthPointLabel(visibleHeartbeatPoints.at(-1)!)}; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
-                {#if apiHealthResponding}
-                <defs>
-                  <linearGradient id="heartbeat-sweep-gradient">
-                    <stop offset="0%" stop-color="white" />
-                    <stop offset="100%" stop-color="white" />
-                  </linearGradient>
-                  <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={heartbeatMonitorWidth} height="120">
-                    <rect width={heartbeatMonitorWidth} height="120" fill="black" />
-                    <rect y="0" width={heartbeatMonitorWidth / 2} height="120" fill="url(#heartbeat-sweep-gradient)">
-                      <animate attributeName="x" from="0" to={heartbeatMonitorWidth} dur={`${heartbeatAnimationDuration}s`} repeatCount="indefinite" />
-                    </rect>
-                    <rect y="0" width={heartbeatMonitorWidth / 2} height="120" fill="url(#heartbeat-sweep-gradient)">
-                      <animate attributeName="x" from={-heartbeatMonitorWidth} to="0" dur={`${heartbeatAnimationDuration}s`} repeatCount="indefinite" />
-                    </rect>
-                  </mask>
-                  <mask id="heartbeat-base-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={heartbeatMonitorWidth} height="120">
-                    <rect width={heartbeatMonitorWidth} height="120" fill="white" />
-                    <rect y="0" width={heartbeatMonitorWidth / 2} height="120" fill="black">
-                      <animate attributeName="x" from="0" to={heartbeatMonitorWidth} dur={`${heartbeatAnimationDuration}s`} repeatCount="indefinite" />
-                    </rect>
-                    <rect y="0" width={heartbeatMonitorWidth / 2} height="120" fill="black">
-                      <animate attributeName="x" from={-heartbeatMonitorWidth} to="0" dur={`${heartbeatAnimationDuration}s`} repeatCount="indefinite" />
-                    </rect>
-                  </mask>
-                </defs>
-                {#each heartbeatBaselines(visibleHeartbeatPoints, heartbeatMonitorWidth) as trace}
-                  <path
-                    class="heartbeat-trace-base"
-                    mask="url(#heartbeat-base-mask)"
-                    class:heartbeat-trace-up={trace.status === 'up'}
-                    class:heartbeat-trace-down={trace.status === 'down'}
-                    class:heartbeat-trace-paused={trace.status === 'paused'}
-                    class:heartbeat-trace-unknown={trace.status === 'unknown'}
-                    d={trace.path}
-                  />
-                {/each}
-                <g class="heartbeat-trace-sweep" mask="url(#heartbeat-sweep-mask)">
-                  {#each heartbeatTraces(visibleHeartbeatPoints, heartbeatMonitorWidth) as trace}
-                    <path
-                      class:heartbeat-trace-up={trace.status === 'up'}
-                      class:heartbeat-trace-down={trace.status === 'down'}
-                      class:heartbeat-trace-paused={trace.status === 'paused'}
-                      class:heartbeat-trace-unknown={trace.status === 'unknown'}
-                      d={trace.path}
+          <div class="heartbeat-monitor" use:observeHeartbeatMonitor aria-live="polite">
+            <svg viewBox={`0 0 ${heartbeatMonitorWidth} 120`} preserveAspectRatio="none" role="img" aria-label={heartbeatConnection === 'connected' ? 'Live API heartbeat received directly over WebSocket' : heartbeatConnection === 'disconnected' ? 'No heartbeat; API WebSocket is unavailable' : 'Connecting directly to the API heartbeat'}>
+              {#if heartbeatConnection === 'connected'}
+                <g class="heartbeat-signal-scroll" aria-hidden="true">
+                  {#if !prefersReducedMotion()}
+                    <animateTransform
+                      attributeName="transform"
+                      type="translate"
+                      from="0 0"
+                      to={`-${heartbeatCycleWidth} 0`}
+                      dur={`${heartbeatAnimationDuration}s`}
+                      repeatCount="indefinite"
                     />
-                  {/each}
+                  {/if}
+                  <path class="heartbeat-trace-up" d={heartbeatSignalPath(heartbeatMonitorWidth)} />
                 </g>
-                <circle class:heartbeat-ping-down={apiHealth.current_status === 'down'} cx={heartbeatMonitorWidth - 4} cy="60" r="3"></circle>
-                {:else}
-                  <path class="heartbeat-trace-unknown" d={`M0 60 H${heartbeatMonitorWidth}`} />
+              {:else}
+                {#if heartbeatConnection === 'disconnected'}
+                  <path class="heartbeat-trace-down heartbeat-trace-dim" d={`M0 60 H${heartbeatMonitorWidth}`} />
                 {/if}
-              </svg>
-            </div>
-            <div class="heartbeat-legend">
-              <span><i class="heartbeat-up"></i>Ping received</span>
-              <span><i class="heartbeat-down"></i>Outage</span>
-              <span><i class="heartbeat-unknown"></i>No data</span>
-            </div>
-            <div class="heartbeat-range">
-              <span>{healthPointLabel(visibleHeartbeatPoints[0])}</span>
-              <span>Each point = one {Math.round(apiHealth.interval_seconds / 60)}-minute check</span>
-              <span>{healthPointLabel(visibleHeartbeatPoints.at(-1)!)}</span>
-            </div>
-            <div class="heartbeat-pagination" aria-label="Heartbeat time range">
-              <button
-                class="heartbeat-page-button"
-                aria-label="Show older heartbeat checks"
-                disabled={selectedPage >= pageCount - 1}
-                onclick={() => heartbeatPage = Math.min(pageCount - 1, selectedPage + 1)}
-              >← Older</button>
-              <span>1-hour window · {pageCount - selectedPage} / {pageCount}</span>
-              <button
-                class="heartbeat-page-button"
-                aria-label="Show newer heartbeat checks"
-                disabled={selectedPage === 0}
-                onclick={() => heartbeatPage = Math.max(0, selectedPage - 1)}
-              >Newer →</button>
-            </div>
+                <path
+                  class:heartbeat-trace-down={heartbeatConnection === 'disconnected'}
+                  class:heartbeat-trace-paused={heartbeatConnection === 'connecting'}
+                  d={`M0 60 H${heartbeatMonitorWidth}`}
+                  pathLength="1000"
+                  stroke-dasharray={heartbeatConnection === 'disconnected' && !prefersReducedMotion() ? '90 910' : undefined}
+                >
+                  {#if heartbeatConnection === 'disconnected' && !prefersReducedMotion()}
+                    <animate
+                      attributeName="stroke-dashoffset"
+                      from="0"
+                      to="-1000"
+                      dur={`${heartbeatAnimationDuration}s`}
+                      repeatCount="indefinite"
+                    />
+                  {/if}
+                </path>
+              {/if}
+            </svg>
           </div>
-        {/if}
+          <div class="heartbeat-legend" aria-live="polite" aria-atomic="true">
+            {#if heartbeatConnection === 'connected'}
+              <span><i class="heartbeat-up"></i>Heartbeat received directly from the API</span>
+            {:else}
+              <span><i class={heartbeatConnection === 'disconnected' ? 'heartbeat-down' : 'heartbeat-paused'}></i>{heartbeatConnection === 'disconnected' ? 'No heartbeat from the API' : 'Waiting for API heartbeat'}</span>
+            {/if}
+          </div>
+        </div>
       </section>
-
       <div class="infrastructure-grid">
         <section class="storage-section" aria-labelledby="storage-heading">
           <div class="section-heading">
