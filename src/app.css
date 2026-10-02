@@ -136,11 +136,9 @@ h1 em{font-style:normal;color:#8d8a82}
 .heartbeat-monitor .heartbeat-trace-paused{stroke:#d4a23e}
 .heartbeat-monitor .heartbeat-trace-unknown{stroke:#77796f}
 .heartbeat-monitor .heartbeat-trace-base{opacity:.3;filter:none}
-.heartbeat-monitor .heartbeat-trace-track{transform-box:fill-box;transform-origin:0 0;animation:heartbeat-scroll 4s linear infinite}
 .heartbeat-monitor circle{fill:var(--lime);filter:drop-shadow(0 0 6px var(--lime));animation:heartbeat-glow 2s ease-in-out infinite}
 .heartbeat-monitor circle.heartbeat-ping-down{fill:#e56b5d;filter:drop-shadow(0 0 6px #e56b5d)}
 @keyframes heartbeat-glow{50%{opacity:.45}}
-@keyframes heartbeat-scroll{to{transform:translateX(-50%)}}
 .heartbeat-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px}
 .heartbeat-legend span{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)}
 .heartbeat-legend i{width:7px;height:7px;border-radius:2px;background:var(--line)}
@@ -177,4 +175,4 @@ h1 em{font-style:normal;color:#8d8a82}
 @media(max-width:650px){.masthead{height:70px;padding:0 22px}.header-meta{font-size:8px;gap:5px}.auth-button{font-size:9px;padding:5px 7px}.profile-dropdown{right:-8px}.main-content{width:calc(100% - 44px)}.hero{padding:76px 0 62px}h1{font-size:clamp(51px,16vw,78px)}.lede{font-size:15px;margin-top:28px}.project-row{grid-template-columns:34px 1fr 24px;gap:10px;padding:20px 0}.project-meta{display:none}.project-copy strong{font-size:21px}.project-copy span{font-size:13px}.project-arrow{font-size:20px}.release-details{align-items:stretch;flex-direction:column}.download-button{justify-content:space-between}.version{font-size:32px}.limits-grid{grid-template-columns:1fr;margin-top:42px}.storage-values{grid-template-columns:1fr 1fr;gap:14px}.storage-values strong{font-size:26px}.render-details{grid-template-columns:1fr 1fr}.render-metric-grid{grid-template-columns:1fr}.render-metric{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:14px}.render-metric-heading strong{font-size:22px}.metric-chart{height:108px}.heartbeat-summary{gap:12px}.heartbeat-summary strong{font-size:16px}.heartbeat-monitor{height:130px;background-size:24px 24px}.heartbeat-range{font-size:8px;gap:5px}.heartbeat-range span:nth-child(2){display:none}.heartbeat-pagination{gap:6px;font-size:9px}.heartbeat-page-button{padding:8px 6px}.footer{width:calc(100% - 44px);flex-direction:column;gap:8px}.aside-note{padding-bottom:80px}}
 @media(max-width:520px){.admin-toggle{align-items:flex-start}.admin-entry-form,.admin-lists{grid-template-columns:1fr}.admin-lists>section:last-child{grid-column:auto}.admin-entry-form{margin-bottom:44px}}
 @media(max-width:420px){.render-metric{grid-template-columns:1fr}.render-metric-heading{flex-direction:row;align-items:baseline}.metric-chart{height:110px}.render-metric-history{width:100%}}
-@media(prefers-reduced-motion:reduce){.heartbeat-monitor .heartbeat-trace-track{animation:none}.heartbeat-monitor circle{animation:none}}
+@media(prefers-reduced-motion:reduce){.heartbeat-monitor .heartbeat-trace-sweep{display:none}.heartbeat-monitor .heartbeat-trace-base{mask:none}.heartbeat-monitor circle{animation:none}}

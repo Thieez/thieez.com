@@ -916,25 +916,39 @@
                 <defs>
                   <linearGradient id="heartbeat-sweep-gradient">
                     <stop offset="0%" stop-color="black" />
-                    <stop offset="3%" stop-color="black" />
-                    <stop offset="8%" stop-color="white" />
-                    <stop offset="92%" stop-color="white" />
-                    <stop offset="97%" stop-color="black" />
+                    <stop offset="15%" stop-color="white" stop-opacity=".35" />
+                    <stop offset="32%" stop-color="white" stop-opacity=".9" />
+                    <stop offset="50%" stop-color="white" />
+                    <stop offset="68%" stop-color="white" stop-opacity=".9" />
+                    <stop offset="85%" stop-color="white" stop-opacity=".35" />
                     <stop offset="100%" stop-color="black" />
                   </linearGradient>
                   <linearGradient id="heartbeat-base-gradient">
                     <stop offset="0%" stop-color="white" />
-                    <stop offset="3%" stop-color="white" />
-                    <stop offset="8%" stop-color="black" />
-                    <stop offset="92%" stop-color="black" />
-                    <stop offset="97%" stop-color="white" />
+                    <stop offset="15%" stop-color="white" stop-opacity=".65" />
+                    <stop offset="32%" stop-color="black" stop-opacity=".9" />
+                    <stop offset="50%" stop-color="black" />
+                    <stop offset="68%" stop-color="black" stop-opacity=".9" />
+                    <stop offset="85%" stop-color="white" stop-opacity=".65" />
                     <stop offset="100%" stop-color="white" />
                   </linearGradient>
                   <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
-                    <rect width="1200" height="120" fill="url(#heartbeat-sweep-gradient)" />
+                    <rect width="1200" height="120" fill="black" />
+                    <rect y="0" width="180" height="120" fill="url(#heartbeat-sweep-gradient)">
+                      <animate attributeName="x" from="0" to="1200" dur="12s" repeatCount="indefinite" />
+                    </rect>
+                    <rect y="0" width="180" height="120" fill="url(#heartbeat-sweep-gradient)">
+                      <animate attributeName="x" from="-1200" to="0" dur="12s" repeatCount="indefinite" />
+                    </rect>
                   </mask>
                   <mask id="heartbeat-base-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
-                    <rect width="1200" height="120" fill="url(#heartbeat-base-gradient)" />
+                    <rect width="1200" height="120" fill="white" />
+                    <rect y="0" width="180" height="120" fill="url(#heartbeat-base-gradient)">
+                      <animate attributeName="x" from="0" to="1200" dur="12s" repeatCount="indefinite" />
+                    </rect>
+                    <rect y="0" width="180" height="120" fill="url(#heartbeat-base-gradient)">
+                      <animate attributeName="x" from="-1200" to="0" dur="12s" repeatCount="indefinite" />
+                    </rect>
                   </mask>
                 </defs>
                 {#each heartbeatBaselines(visibleHeartbeatPoints) as trace}
@@ -949,28 +963,15 @@
                   />
                 {/each}
                 <g class="heartbeat-trace-sweep" mask="url(#heartbeat-sweep-mask)">
-                  <g class="heartbeat-trace-track">
-                    {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
-                      <path
-                        class:heartbeat-trace-up={trace.status === 'up'}
-                        class:heartbeat-trace-down={trace.status === 'down'}
-                        class:heartbeat-trace-paused={trace.status === 'paused'}
-                        class:heartbeat-trace-unknown={trace.status === 'unknown'}
-                        d={trace.path}
-                      />
-                    {/each}
-                    <g transform="translate(1200 0)">
-                      {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
-                        <path
-                          class:heartbeat-trace-up={trace.status === 'up'}
-                          class:heartbeat-trace-down={trace.status === 'down'}
-                          class:heartbeat-trace-paused={trace.status === 'paused'}
-                          class:heartbeat-trace-unknown={trace.status === 'unknown'}
-                          d={trace.path}
-                        />
-                      {/each}
-                    </g>
-                  </g>
+                  {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
+                    <path
+                      class:heartbeat-trace-up={trace.status === 'up'}
+                      class:heartbeat-trace-down={trace.status === 'down'}
+                      class:heartbeat-trace-paused={trace.status === 'paused'}
+                      class:heartbeat-trace-unknown={trace.status === 'unknown'}
+                      d={trace.path}
+                    />
+                  {/each}
                 </g>
                 <circle class:heartbeat-ping-down={apiHealth.current_status === 'down'} cx="1196" cy="60" r="3"></circle>
               </svg>
