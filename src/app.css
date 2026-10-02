@@ -134,7 +134,6 @@ h1 em{font-style:normal;color:#8d8a82}
 .heartbeat-monitor .heartbeat-trace-up{stroke:var(--lime);filter:drop-shadow(0 0 4px rgba(215,243,74,.65))}
 .heartbeat-monitor .heartbeat-trace-down{stroke:#e56b5d}
 .heartbeat-monitor .heartbeat-trace-paused{stroke:#d4a23e}
-.heartbeat-monitor .heartbeat-signal-scroll{will-change:transform}
 .heartbeat-monitor .heartbeat-trace-down{stroke:#e56b5d;filter:drop-shadow(0 0 4px rgba(229,107,93,.65))}
 .heartbeat-monitor .heartbeat-trace-dim{opacity:.35;filter:none}
 .heartbeat-monitor .heartbeat-trace-paused{stroke:#77796f}

@@ -493,6 +493,9 @@
 
   const heartbeatCycleWidth = (): number =>
     heartbeatMonitorWidth / Math.max(1, Math.floor(heartbeatMonitorWidth / 120));
+  const heartbeatSweepWidth = (): number => Math.max(100, Math.round(heartbeatMonitorWidth * 0.18));
+  const heartbeatSweepDuration = (): string =>
+    ((heartbeatMonitorWidth + 2 * heartbeatSweepWidth() + 36) / 150).toFixed(2);
   const heartbeatAnimationDuration = (): string => (heartbeatCycleWidth() / 150).toFixed(2);
   const prefersReducedMotion = () => browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -500,8 +503,9 @@
     const beats: string[] = [];
     const cycleWidth = heartbeatCycleWidth();
     for (let x = -61; x < monitorWidth + 61; x += cycleWidth) {
+      const at = (fraction: number) => x + cycleWidth * fraction;
       beats.push(
-        `M${x} 60 H${x + 38} Q${x + 44} 60 ${x + 48} 54 H${x + 54} L${x + 61} 14 L${x + 68} 105 L${x + 76} 60 Q${x + 82} 60 ${x + 88} 53 Q${x + 94} 60 ${x + 102} 60 H${x + cycleWidth}`
+        `M${x} 60 H${at(0.2375)} Q${at(0.275)} 60 ${at(0.3)} 54 H${at(0.3375)} L${at(0.38125)} 14 L${at(0.425)} 105 L${at(0.475)} 60 Q${at(0.5125)} 60 ${at(0.55)} 53 Q${at(0.5875)} 60 ${at(0.6375)} 60 H${at(1)}`
       );
     }
     return beats.join(' ');
@@ -848,19 +852,30 @@
           <div class="heartbeat-monitor" use:observeHeartbeatMonitor aria-live="polite">
             <svg viewBox={`0 0 ${heartbeatMonitorWidth} 120`} preserveAspectRatio="none" role="img" aria-label={heartbeatConnection === 'connected' ? 'Live API heartbeat received directly over WebSocket' : heartbeatConnection === 'disconnected' ? 'No heartbeat; API WebSocket is unavailable' : 'Connecting directly to the API heartbeat'}>
               {#if heartbeatConnection === 'connected'}
-                <g class="heartbeat-signal-scroll" aria-hidden="true">
-                  {#if !prefersReducedMotion()}
-                    <animateTransform
-                      attributeName="transform"
-                      type="translate"
-                      from="0 0"
-                      to={`-${heartbeatCycleWidth()} 0`}
-                      dur={`${heartbeatAnimationDuration()}s`}
-                      repeatCount="indefinite"
-                    />
-                  {/if}
-                  <path class="heartbeat-trace-up" d={heartbeatSignalPath(heartbeatMonitorWidth)} />
-                </g>
+                <path class="heartbeat-trace-up heartbeat-trace-dim" d={`M0 60 H${heartbeatMonitorWidth}`} aria-hidden="true" />
+                {#if !prefersReducedMotion()}
+                  <defs>
+                    <linearGradient id="heartbeat-sweep-gradient">
+                      <stop offset="0%" stop-color="white" stop-opacity="0" />
+                      <stop offset="35%" stop-color="white" stop-opacity=".35" />
+                      <stop offset="65%" stop-color="white" />
+                      <stop offset="100%" stop-color="white" stop-opacity="0" />
+                    </linearGradient>
+                    <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={heartbeatMonitorWidth} height="120">
+                      <rect width={heartbeatMonitorWidth} height="120" fill="black" />
+                      <rect y="0" width={heartbeatSweepWidth()} height="120" fill="url(#heartbeat-sweep-gradient)">
+                        <animate
+                          attributeName="x"
+                          from={-heartbeatSweepWidth() - 18}
+                          to={heartbeatMonitorWidth + 18}
+                          dur={`${heartbeatSweepDuration()}s`}
+                          repeatCount="indefinite"
+                        />
+                      </rect>
+                    </mask>
+                  </defs>
+                  <path class="heartbeat-trace-up" d={heartbeatSignalPath(heartbeatMonitorWidth)} mask="url(#heartbeat-sweep-mask)" aria-hidden="true" />
+                {/if}
               {:else}
                 {#if heartbeatConnection === 'disconnected'}
                   <path class="heartbeat-trace-down heartbeat-trace-dim" d={`M0 60 H${heartbeatMonitorWidth}`} />
