@@ -499,15 +499,24 @@
   const heartbeatAnimationDuration = (): string => (heartbeatCycleWidth() / 150).toFixed(2);
   const prefersReducedMotion = () => browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const heartbeatPulsePath = (monitorWidth: number): string => {
+  const heartbeatSignalPath = (monitorWidth: number): string => {
+    const cycleWidth = heartbeatCycleWidth();
+    const firstBeat = cycleWidth * 0.11875;
+    let path = `M0 60 H${firstBeat + cycleWidth * 0.2375}`;
+    for (let x = firstBeat; x < monitorWidth; x += cycleWidth) {
+      const at = (fraction: number) => x + cycleWidth * fraction;
+      path += `Q${at(0.275)} 60 ${at(0.3)} 54 H${at(0.3375)} L${at(0.38125)} 14 L${at(0.425)} 105 L${at(0.475)} 60 Q${at(0.5125)} 60 ${at(0.55)} 53 Q${at(0.5875)} 60 ${at(0.6375)} 60 H${Math.min(monitorWidth, at(1.2375))}`;
+    }
+    return `${path} H${monitorWidth}`;
+  };
+
+  const heartbeatBaselineGapPath = (monitorWidth: number): string => {
     const segments: string[] = [];
     const cycleWidth = heartbeatCycleWidth();
     const firstBeat = cycleWidth * 0.11875;
     for (let x = firstBeat; x < monitorWidth; x += cycleWidth) {
       const at = (fraction: number) => x + cycleWidth * fraction;
-      segments.push(
-        `M${at(0.2375)} 60 Q${at(0.275)} 60 ${at(0.3)} 54 H${at(0.3375)} L${at(0.38125)} 14 L${at(0.425)} 105 L${at(0.475)} 60 Q${at(0.5125)} 60 ${at(0.55)} 53 Q${at(0.5875)} 60 ${at(0.6375)} 60`
-      );
+      segments.push(`M${at(0.2375)} 60 H${at(0.6375)}`);
     }
     return segments.join(' ');
   };
@@ -875,8 +884,8 @@
                       </rect>
                     </mask>
                   </defs>
-                  <path class="heartbeat-trace-cut" d={heartbeatPulsePath(heartbeatMonitorWidth)} mask="url(#heartbeat-sweep-mask)" aria-hidden="true" />
-                  <path class="heartbeat-trace-up" d={heartbeatPulsePath(heartbeatMonitorWidth)} mask="url(#heartbeat-sweep-mask)" aria-hidden="true" />
+                  <path class="heartbeat-trace-cut" d={heartbeatBaselineGapPath(heartbeatMonitorWidth)} mask="url(#heartbeat-sweep-mask)" aria-hidden="true" />
+                  <path class="heartbeat-trace-up" d={heartbeatSignalPath(heartbeatMonitorWidth)} mask="url(#heartbeat-sweep-mask)" aria-hidden="true" />
                 {/if}
               {:else}
                 {#if heartbeatConnection === 'disconnected'}
