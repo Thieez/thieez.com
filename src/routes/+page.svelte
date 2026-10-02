@@ -925,28 +925,28 @@
                   </linearGradient>
                   <linearGradient id="heartbeat-base-gradient">
                     <stop offset="0%" stop-color="white" />
-                    <stop offset="15%" stop-color="white" stop-opacity=".65" />
+                    <stop offset="15%" stop-color="white" stop-opacity=".2" />
                     <stop offset="32%" stop-color="black" stop-opacity=".9" />
                     <stop offset="50%" stop-color="black" />
                     <stop offset="68%" stop-color="black" stop-opacity=".9" />
-                    <stop offset="85%" stop-color="white" stop-opacity=".65" />
+                    <stop offset="85%" stop-color="white" stop-opacity=".2" />
                     <stop offset="100%" stop-color="white" />
                   </linearGradient>
                   <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
                     <rect width="1200" height="120" fill="black" />
-                    <rect y="0" width="180" height="120" fill="url(#heartbeat-sweep-gradient)">
+                    <rect y="0" width="600" height="120" fill="url(#heartbeat-sweep-gradient)">
                       <animate attributeName="x" from="0" to="1200" dur="12s" repeatCount="indefinite" />
                     </rect>
-                    <rect y="0" width="180" height="120" fill="url(#heartbeat-sweep-gradient)">
+                    <rect y="0" width="600" height="120" fill="url(#heartbeat-sweep-gradient)">
                       <animate attributeName="x" from="-1200" to="0" dur="12s" repeatCount="indefinite" />
                     </rect>
                   </mask>
                   <mask id="heartbeat-base-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
                     <rect width="1200" height="120" fill="white" />
-                    <rect y="0" width="180" height="120" fill="url(#heartbeat-base-gradient)">
+                    <rect y="0" width="600" height="120" fill="url(#heartbeat-base-gradient)">
                       <animate attributeName="x" from="0" to="1200" dur="12s" repeatCount="indefinite" />
                     </rect>
-                    <rect y="0" width="180" height="120" fill="url(#heartbeat-base-gradient)">
+                    <rect y="0" width="600" height="120" fill="url(#heartbeat-base-gradient)">
                       <animate attributeName="x" from="-1200" to="0" dur="12s" repeatCount="indefinite" />
                     </rect>
                   </mask>
