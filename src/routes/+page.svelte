@@ -913,9 +913,34 @@
             </div>
             <div class="heartbeat-monitor">
               <svg viewBox="0 0 1200 120" preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat from ${healthPointLabel(visibleHeartbeatPoints[0])} to ${healthPointLabel(visibleHeartbeatPoints.at(-1)!)}; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
+                <defs>
+                  <linearGradient id="heartbeat-sweep-gradient">
+                    <stop offset="0%" stop-color="black" />
+                    <stop offset="3%" stop-color="black" />
+                    <stop offset="8%" stop-color="white" />
+                    <stop offset="92%" stop-color="white" />
+                    <stop offset="97%" stop-color="black" />
+                    <stop offset="100%" stop-color="black" />
+                  </linearGradient>
+                  <linearGradient id="heartbeat-base-gradient">
+                    <stop offset="0%" stop-color="white" />
+                    <stop offset="3%" stop-color="white" />
+                    <stop offset="8%" stop-color="black" />
+                    <stop offset="92%" stop-color="black" />
+                    <stop offset="97%" stop-color="white" />
+                    <stop offset="100%" stop-color="white" />
+                  </linearGradient>
+                  <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
+                    <rect width="1200" height="120" fill="url(#heartbeat-sweep-gradient)" />
+                  </mask>
+                  <mask id="heartbeat-base-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
+                    <rect width="1200" height="120" fill="url(#heartbeat-base-gradient)" />
+                  </mask>
+                </defs>
                 {#each heartbeatBaselines(visibleHeartbeatPoints) as trace}
                   <path
                     class="heartbeat-trace-base"
+                    mask="url(#heartbeat-base-mask)"
                     class:heartbeat-trace-up={trace.status === 'up'}
                     class:heartbeat-trace-down={trace.status === 'down'}
                     class:heartbeat-trace-paused={trace.status === 'paused'}
@@ -923,16 +948,29 @@
                     d={trace.path}
                   />
                 {/each}
-                <g class="heartbeat-trace-sweep">
-                  {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
-                    <path
-                      class:heartbeat-trace-up={trace.status === 'up'}
-                      class:heartbeat-trace-down={trace.status === 'down'}
-                      class:heartbeat-trace-paused={trace.status === 'paused'}
-                      class:heartbeat-trace-unknown={trace.status === 'unknown'}
-                      d={trace.path}
-                    />
-                  {/each}
+                <g class="heartbeat-trace-sweep" mask="url(#heartbeat-sweep-mask)">
+                  <g class="heartbeat-trace-track">
+                    {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
+                      <path
+                        class:heartbeat-trace-up={trace.status === 'up'}
+                        class:heartbeat-trace-down={trace.status === 'down'}
+                        class:heartbeat-trace-paused={trace.status === 'paused'}
+                        class:heartbeat-trace-unknown={trace.status === 'unknown'}
+                        d={trace.path}
+                      />
+                    {/each}
+                    <g transform="translate(1200 0)">
+                      {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
+                        <path
+                          class:heartbeat-trace-up={trace.status === 'up'}
+                          class:heartbeat-trace-down={trace.status === 'down'}
+                          class:heartbeat-trace-paused={trace.status === 'paused'}
+                          class:heartbeat-trace-unknown={trace.status === 'unknown'}
+                          d={trace.path}
+                        />
+                      {/each}
+                    </g>
+                  </g>
                 </g>
                 <circle class:heartbeat-ping-down={apiHealth.current_status === 'down'} cx="1196" cy="60" r="3"></circle>
               </svg>
