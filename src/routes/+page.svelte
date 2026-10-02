@@ -495,7 +495,7 @@
     heartbeatMonitorWidth / Math.max(1, Math.floor(heartbeatMonitorWidth / 120));
   const heartbeatSweepWidth = (): number => Math.max(100, Math.round(heartbeatMonitorWidth * 0.18));
   const heartbeatSweepDuration = (): string =>
-    ((heartbeatMonitorWidth + 2 * heartbeatSweepWidth() + 36) / 150).toFixed(2);
+    ((heartbeatMonitorWidth + heartbeatSweepWidth() + 36) / 150).toFixed(2);
   const heartbeatAnimationDuration = (): string => (heartbeatCycleWidth() / 150).toFixed(2);
   const prefersReducedMotion = () => browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
