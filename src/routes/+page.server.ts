@@ -63,7 +63,7 @@ async function fetchJson<T>(fetcher: typeof fetch, path: string): Promise<T> {
 }
 
 export const load: PageServerLoad = async ({ fetch, setHeaders, url }) => {
-  const accessDenied = url.searchParams.get('access_denied');
+  const accessDenied = url.searchParams.has('access_denied');
   const accessCheckFailed = url.searchParams.has('access_check_failed');
   setHeaders(
     accessDenied || accessCheckFailed
@@ -86,6 +86,21 @@ export const load: PageServerLoad = async ({ fetch, setHeaders, url }) => {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+
+  if (accessDenied || accessCheckFailed) {
+    return {
+      isLisnnto,
+      isNote,
+      projectName,
+      build: null,
+      projects: null,
+      apiHealth: null,
+      storage: null,
+      renderLimits: null,
+      accessDenied,
+      accessCheckFailed
+    };
+  }
 
   if (isLisnnto || isNote) {
     const build = await cached<LatestBuild | PluginBuild>(`build:${projectSlug}`, async () => {

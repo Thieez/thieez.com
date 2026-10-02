@@ -86,6 +86,10 @@
 
   const load = async () => {
     detectExperience();
+    if (accessDenied || accessCheckFailed) {
+      loading = false;
+      return;
+    }
     loading = isLisnnto || isNote ? build === null : !hasProjectsData;
     error = '';
     projectError = '';
@@ -603,7 +607,21 @@
   {/if}
 
   <main class="main-content">
-    {#if adminOpen}
+    {#if accessDenied}
+      <section class="account-view" aria-labelledby="access-denied-heading">
+        <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
+        <h1 id="access-denied-heading">No access <em>yet.</em></h1>
+        <p class="lede">Your account hasn’t been granted access to {projectName}.</p>
+        <a class="text-button" href="https://www.thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
+      </section>
+    {:else if accessCheckFailed}
+      <section class="account-view" aria-labelledby="access-check-heading">
+        <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
+        <h1 id="access-check-heading">Access check <em>unavailable.</em></h1>
+        <p class="lede">We couldn’t verify access right now. Please try again shortly.</p>
+        <a class="text-button" href="https://www.thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
+      </section>
+    {:else if adminOpen}
       <section class="account-view admin-view" aria-labelledby="admin-heading">
         <div class="account-topline">
           <p class="eyebrow">THIEEZ / DASHBOARD</p>
@@ -985,18 +1003,6 @@
           <h2 id="projects-heading">Selected work</h2>
           <span>{projects.length.toString().padStart(2, '0')} projects</span>
         </div>
-        {#if accessDenied}
-          <div class="state-panel error-panel" role="status">
-            <strong>You don’t have access to this project.</strong>
-            <span>{accessDenied.replaceAll('-', ' ')}</span>
-            <button class="text-button" onclick={startLogin}>Sign in <span aria-hidden="true">↗</span></button>
-          </div>
-        {:else if accessCheckFailed}
-          <div class="state-panel error-panel" role="alert">
-            <strong>Couldn’t check project access.</strong>
-            <span>Please try again in a moment.</span>
-          </div>
-        {/if}
         {#if loading}
           <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading the index…</span></div>
         {:else if projectError}
