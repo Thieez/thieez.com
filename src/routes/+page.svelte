@@ -63,6 +63,7 @@
   let healthRefreshTimer: number | undefined;
   let authRefreshTimer: number | undefined;
   let heartbeatPage = 0;
+  let heartbeatViewportWidth = 1200;
   let renderLimits: RenderLimits | null = data.renderLimits?.value ?? null;
   let renderLimitsLoading = false;
   let renderLimitsError = renderLimits ? '' : data.renderLimits?.error ?? '';
@@ -190,6 +191,11 @@
   onMount(() => {
     document.addEventListener('click', closeMenus);
     document.addEventListener('keydown', handleDocumentKeydown);
+    const updateHeartbeatViewportWidth = () => {
+      heartbeatViewportWidth = window.innerWidth;
+    };
+    updateHeartbeatViewportWidth();
+    window.addEventListener('resize', updateHeartbeatViewportWidth);
     for (const [resource, result] of initialCacheResults) {
       if (
         result?.updatedAt &&
@@ -253,6 +259,7 @@
       if (authRefreshTimer !== undefined) window.clearInterval(authRefreshTimer);
       document.removeEventListener('click', closeMenus);
       document.removeEventListener('keydown', handleDocumentKeydown);
+      window.removeEventListener('resize', updateHeartbeatViewportWidth);
     };
   });
 
@@ -529,9 +536,19 @@
     return points.slice(Math.max(0, end - size), end);
   };
 
-  const heartbeatTraces = (points: ApiHealth['points']): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
+  const heartbeatTraces = (
+    points: ApiHealth['points'],
+    viewportWidth: number
+  ): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
     const traces: Array<{ status: ApiHealth['points'][number]['status']; path: string }> = [];
     const cycleWidth = 1200 / points.length;
+    const upPointIndices = points.flatMap((point, index) => point.status === 'up' ? [index] : []);
+    const peakCount = Math.min(upPointIndices.length, Math.max(1, Math.floor(viewportWidth / 180)));
+    const peakIndices = new Set(
+      Array.from({ length: peakCount }, (_, index) =>
+        upPointIndices[Math.floor((index + 0.5) * upPointIndices.length / peakCount)]
+      )
+    );
     for (const [index, point] of points.entries()) {
       const x = index * cycleWidth;
       let trace = traces.at(-1);
@@ -539,7 +556,7 @@
         trace = { status: point.status, path: '' };
         traces.push(trace);
       }
-      const beat = point.status === 'up' && index % 2 === 0
+      const beat = peakIndices.has(index)
         ? `M${x.toFixed(2)} 60 H${(x + cycleWidth * 0.28).toFixed(2)} Q${(x + cycleWidth * 0.32).toFixed(2)} 60 ${(x + cycleWidth * 0.36).toFixed(2)} 54 H${(x + cycleWidth * 0.4).toFixed(2)} L${(x + cycleWidth * 0.46).toFixed(2)} 14 L${(x + cycleWidth * 0.52).toFixed(2)} 105 L${(x + cycleWidth * 0.58).toFixed(2)} 60 Q${(x + cycleWidth * 0.64).toFixed(2)} 60 ${(x + cycleWidth * 0.68).toFixed(2)} 53 Q${(x + cycleWidth * 0.72).toFixed(2)} 60 ${(x + cycleWidth * 0.78).toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`
         : `M${x.toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`;
       trace.path += `${trace.path ? ' ' : ''}${beat}`;
@@ -949,7 +966,7 @@
                   />
                 {/each}
                 <g class="heartbeat-trace-sweep" mask="url(#heartbeat-sweep-mask)">
-                  {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
+                  {#each heartbeatTraces(visibleHeartbeatPoints, heartbeatViewportWidth) as trace}
                     <path
                       class:heartbeat-trace-up={trace.status === 'up'}
                       class:heartbeat-trace-down={trace.status === 'down'}
