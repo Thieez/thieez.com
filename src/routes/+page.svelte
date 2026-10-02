@@ -491,15 +491,17 @@
   const availableMetricDefinitions = (): typeof metricDefinitions =>
     metricDefinitions.filter((definition) => metricPoints(definition.name, definition.aggregate).length > 0);
 
-  const heartbeatCycleWidth = 160;
-  const heartbeatAnimationDuration = (heartbeatCycleWidth / 150).toFixed(2);
+  const heartbeatCycleWidth = (): number =>
+    heartbeatMonitorWidth / Math.max(1, Math.floor(heartbeatMonitorWidth / 120));
+  const heartbeatAnimationDuration = (): string => (heartbeatCycleWidth() / 150).toFixed(2);
   const prefersReducedMotion = () => browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const heartbeatSignalPath = (monitorWidth: number): string => {
     const beats: string[] = [];
-    for (let x = -heartbeatCycleWidth; x < monitorWidth + heartbeatCycleWidth; x += heartbeatCycleWidth) {
+    const cycleWidth = heartbeatCycleWidth();
+    for (let x = -61; x < monitorWidth + 61; x += cycleWidth) {
       beats.push(
-        `M${x} 60 H${x + 38} Q${x + 44} 60 ${x + 48} 54 H${x + 54} L${x + 61} 14 L${x + 68} 105 L${x + 76} 60 Q${x + 82} 60 ${x + 88} 53 Q${x + 94} 60 ${x + 102} 60 H${x + heartbeatCycleWidth}`
+        `M${x} 60 H${x + 38} Q${x + 44} 60 ${x + 48} 54 H${x + 54} L${x + 61} 14 L${x + 68} 105 L${x + 76} 60 Q${x + 82} 60 ${x + 88} 53 Q${x + 94} 60 ${x + 102} 60 H${x + cycleWidth}`
       );
     }
     return beats.join(' ');
@@ -852,8 +854,8 @@
                       attributeName="transform"
                       type="translate"
                       from="0 0"
-                      to={`-${heartbeatCycleWidth} 0`}
-                      dur={`${heartbeatAnimationDuration}s`}
+                      to={`-${heartbeatCycleWidth()} 0`}
+                      dur={`${heartbeatAnimationDuration()}s`}
                       repeatCount="indefinite"
                     />
                   {/if}
@@ -875,7 +877,7 @@
                       attributeName="stroke-dashoffset"
                       from="0"
                       to="-1000"
-                      dur={`${heartbeatAnimationDuration}s`}
+                      dur={`${heartbeatAnimationDuration()}s`}
                       repeatCount="indefinite"
                     />
                   {/if}
