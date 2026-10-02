@@ -502,13 +502,24 @@
   const heartbeatSignalPath = (monitorWidth: number): string => {
     const beats: string[] = [];
     const cycleWidth = heartbeatCycleWidth();
-    for (let x = -61; x < monitorWidth + 61; x += cycleWidth) {
+    const firstBeat = -cycleWidth * 0.88125;
+    for (let x = firstBeat; x < monitorWidth; x += cycleWidth) {
       const at = (fraction: number) => x + cycleWidth * fraction;
       beats.push(
         `M${x} 60 H${at(0.2375)} Q${at(0.275)} 60 ${at(0.3)} 54 H${at(0.3375)} L${at(0.38125)} 14 L${at(0.425)} 105 L${at(0.475)} 60 Q${at(0.5125)} 60 ${at(0.55)} 53 Q${at(0.5875)} 60 ${at(0.6375)} 60 H${at(1)}`
       );
     }
     return beats.join(' ');
+  };
+
+  const heartbeatBaselinePath = (monitorWidth: number): string => {
+    const segments: string[] = [];
+    const cycleWidth = heartbeatCycleWidth();
+    const firstBeat = -cycleWidth * 0.88125;
+    for (let x = firstBeat; x < monitorWidth; x += cycleWidth) {
+      segments.push(`M${x} 60 H${x + cycleWidth * 0.3} M${x + cycleWidth * 0.475} 60 H${x + cycleWidth}`);
+    }
+    return segments.join(' ');
   };
 
 </script>
@@ -852,7 +863,7 @@
           <div class="heartbeat-monitor" use:observeHeartbeatMonitor aria-live="polite">
             <svg viewBox={`0 0 ${heartbeatMonitorWidth} 120`} preserveAspectRatio="none" role="img" aria-label={heartbeatConnection === 'connected' ? 'Live API heartbeat received directly over WebSocket' : heartbeatConnection === 'disconnected' ? 'No heartbeat; API WebSocket is unavailable' : 'Connecting directly to the API heartbeat'}>
               {#if heartbeatConnection === 'connected'}
-                <path class="heartbeat-trace-up heartbeat-trace-dim" d={`M0 60 H${heartbeatMonitorWidth}`} aria-hidden="true" />
+                <path class="heartbeat-trace-up heartbeat-trace-dim" d={heartbeatBaselinePath(heartbeatMonitorWidth)} aria-hidden="true" />
                 {#if !prefersReducedMotion()}
                   <defs>
                     <linearGradient id="heartbeat-sweep-gradient">
