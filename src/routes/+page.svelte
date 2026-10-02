@@ -516,7 +516,7 @@
     const firstBeat = cycleWidth * 0.11875;
     for (let x = firstBeat; x < monitorWidth; x += cycleWidth) {
       const at = (fraction: number) => x + cycleWidth * fraction;
-      segments.push(`M${at(0.2375)} 60 H${at(0.6375)}`);
+      segments.push(`M${at(0.26)} 60 H${at(0.7)}`);
     }
     return segments.join(' ');
   };
