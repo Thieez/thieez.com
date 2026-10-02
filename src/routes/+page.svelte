@@ -547,21 +547,6 @@
     return traces;
   };
 
-  const heartbeatBaselines = (points: ApiHealth['points']): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
-    const traces: Array<{ status: ApiHealth['points'][number]['status']; path: string }> = [];
-    const cycleWidth = 1200 / points.length;
-    for (const [index, point] of points.entries()) {
-      const x = index * cycleWidth;
-      let trace = traces.at(-1);
-      if (!trace || trace.status !== point.status) {
-        trace = { status: point.status, path: '' };
-        traces.push(trace);
-      }
-      trace.path += `${trace.path ? ' ' : ''}M${x.toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`;
-    }
-    return traces;
-  };
-
 </script>
 
 <svelte:head>
@@ -913,42 +898,7 @@
             </div>
             <div class="heartbeat-monitor">
               <svg viewBox="0 0 1200 120" preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat from ${healthPointLabel(visibleHeartbeatPoints[0])} to ${healthPointLabel(visibleHeartbeatPoints.at(-1)!)}; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
-                <defs>
-                  <linearGradient id="heartbeat-sweep-gradient">
-                    <stop offset="0%" stop-color="white" />
-                    <stop offset="100%" stop-color="white" />
-                  </linearGradient>
-                  <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
-                    <rect width="1200" height="120" fill="black" />
-                    <rect y="0" width="600" height="120" fill="url(#heartbeat-sweep-gradient)">
-                      <animate attributeName="x" from="0" to="1200" dur="8s" repeatCount="indefinite" />
-                    </rect>
-                    <rect y="0" width="600" height="120" fill="url(#heartbeat-sweep-gradient)">
-                      <animate attributeName="x" from="-1200" to="0" dur="8s" repeatCount="indefinite" />
-                    </rect>
-                  </mask>
-                  <mask id="heartbeat-base-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
-                    <rect width="1200" height="120" fill="white" />
-                    <rect y="0" width="600" height="120" fill="black">
-                      <animate attributeName="x" from="0" to="1200" dur="8s" repeatCount="indefinite" />
-                    </rect>
-                    <rect y="0" width="600" height="120" fill="black">
-                      <animate attributeName="x" from="-1200" to="0" dur="8s" repeatCount="indefinite" />
-                    </rect>
-                  </mask>
-                </defs>
-                {#each heartbeatBaselines(visibleHeartbeatPoints) as trace}
-                  <path
-                    class="heartbeat-trace-base"
-                    mask="url(#heartbeat-base-mask)"
-                    class:heartbeat-trace-up={trace.status === 'up'}
-                    class:heartbeat-trace-down={trace.status === 'down'}
-                    class:heartbeat-trace-paused={trace.status === 'paused'}
-                    class:heartbeat-trace-unknown={trace.status === 'unknown'}
-                    d={trace.path}
-                  />
-                {/each}
-                <g class="heartbeat-trace-sweep" mask="url(#heartbeat-sweep-mask)">
+                <g class="heartbeat-trace-track">
                   {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
                     <path
                       class:heartbeat-trace-up={trace.status === 'up'}
@@ -958,6 +908,17 @@
                       d={trace.path}
                     />
                   {/each}
+                  <g transform="translate(1200 0)">
+                    {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
+                      <path
+                        class:heartbeat-trace-up={trace.status === 'up'}
+                        class:heartbeat-trace-down={trace.status === 'down'}
+                        class:heartbeat-trace-paused={trace.status === 'paused'}
+                        class:heartbeat-trace-unknown={trace.status === 'unknown'}
+                        d={trace.path}
+                      />
+                    {/each}
+                  </g>
                 </g>
                 <circle class:heartbeat-ping-down={apiHealth.current_status === 'down'} cx="1196" cy="60" r="3"></circle>
               </svg>
