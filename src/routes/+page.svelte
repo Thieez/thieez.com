@@ -491,9 +491,9 @@
   const availableMetricDefinitions = (): typeof metricDefinitions =>
     metricDefinitions.filter((definition) => metricPoints(definition.name, definition.aggregate).length > 0);
 
-  const heartbeatCycleWidth = (): number =>
-    heartbeatMonitorWidth / Math.max(1, Math.floor(heartbeatMonitorWidth / 120));
-  const heartbeatSweepWidth = (): number => Math.max(100, Math.round(heartbeatMonitorWidth * 0.18));
+  const heartbeatCycleWidth = (): number => 160;
+  const heartbeatSweepWidth = (): number => heartbeatCycleWidth();
+  const heartbeatFirstBeat = (): number => heartbeatCycleWidth() * 0.11875;
   const heartbeatSweepDuration = (): string =>
     ((heartbeatMonitorWidth + heartbeatSweepWidth() + 36) / 150).toFixed(2);
   const heartbeatAnimationDuration = (): string => (heartbeatCycleWidth() / 150).toFixed(2);
@@ -867,10 +867,10 @@
                   <defs>
                     <linearGradient id="heartbeat-sweep-gradient">
                       <stop offset="0%" stop-color="white" stop-opacity="0" />
-                      <stop offset="25%" stop-color="white" stop-opacity="0" />
-                      <stop offset="40%" stop-color="white" />
-                      <stop offset="60%" stop-color="white" />
-                      <stop offset="75%" stop-color="white" stop-opacity="0" />
+                      <stop offset="18%" stop-color="white" stop-opacity="0" />
+                      <stop offset="24%" stop-color="white" />
+                      <stop offset="64%" stop-color="white" />
+                      <stop offset="70%" stop-color="white" stop-opacity="0" />
                       <stop offset="100%" stop-color="white" stop-opacity="0" />
                     </linearGradient>
                     <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={heartbeatMonitorWidth} height="120">
@@ -878,8 +878,8 @@
                       <rect y="0" width={heartbeatSweepWidth()} height="120" fill="url(#heartbeat-sweep-gradient)">
                         <animate
                           attributeName="x"
-                          from={-heartbeatSweepWidth() - 18}
-                          to={heartbeatMonitorWidth + 18}
+                          from={heartbeatFirstBeat() - heartbeatSweepWidth() - 18}
+                          to={heartbeatMonitorWidth + heartbeatFirstBeat() + 18}
                           dur={`${heartbeatSweepDuration()}s`}
                           repeatCount="indefinite"
                         />
