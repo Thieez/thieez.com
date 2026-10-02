@@ -539,7 +539,7 @@
         trace = { status: point.status, path: '' };
         traces.push(trace);
       }
-      const beat = point.status === 'up'
+      const beat = point.status === 'up' && index % 2 === 0
         ? `M${x.toFixed(2)} 60 H${(x + cycleWidth * 0.28).toFixed(2)} Q${(x + cycleWidth * 0.32).toFixed(2)} 60 ${(x + cycleWidth * 0.36).toFixed(2)} 54 H${(x + cycleWidth * 0.4).toFixed(2)} L${(x + cycleWidth * 0.46).toFixed(2)} 14 L${(x + cycleWidth * 0.52).toFixed(2)} 105 L${(x + cycleWidth * 0.58).toFixed(2)} 60 Q${(x + cycleWidth * 0.64).toFixed(2)} 60 ${(x + cycleWidth * 0.68).toFixed(2)} 53 Q${(x + cycleWidth * 0.72).toFixed(2)} 60 ${(x + cycleWidth * 0.78).toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`
         : `M${x.toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`;
       trace.path += `${trace.path ? ' ' : ''}${beat}`;
@@ -915,13 +915,8 @@
               <svg viewBox="0 0 1200 120" preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat from ${healthPointLabel(visibleHeartbeatPoints[0])} to ${healthPointLabel(visibleHeartbeatPoints.at(-1)!)}; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
                 <defs>
                   <linearGradient id="heartbeat-sweep-gradient">
-                    <stop offset="0%" stop-color="black" />
-                    <stop offset="15%" stop-color="white" stop-opacity=".35" />
-                    <stop offset="32%" stop-color="white" stop-opacity=".9" />
-                    <stop offset="50%" stop-color="white" />
-                    <stop offset="68%" stop-color="white" stop-opacity=".9" />
-                    <stop offset="85%" stop-color="white" stop-opacity=".35" />
-                    <stop offset="100%" stop-color="black" />
+                    <stop offset="0%" stop-color="white" />
+                    <stop offset="100%" stop-color="white" />
                   </linearGradient>
                   <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
                     <rect width="1200" height="120" fill="black" />
@@ -974,7 +969,7 @@
             </div>
             <div class="heartbeat-range">
               <span>{healthPointLabel(visibleHeartbeatPoints[0])}</span>
-              <span>Each beat = one {Math.round(apiHealth.interval_seconds / 60)}-minute check</span>
+              <span>Each point = one {Math.round(apiHealth.interval_seconds / 60)}-minute check</span>
               <span>{healthPointLabel(visibleHeartbeatPoints.at(-1)!)}</span>
             </div>
             <div class="heartbeat-pagination" aria-label="Heartbeat time range">
