@@ -7,6 +7,7 @@ const ACCESS_COOKIE = 'thieez_access';
 const ACCESS_EXPIRY_COOKIE = 'thieez_access_expires';
 const REFRESH_COOKIE = 'thieez_refresh';
 const DEVICE_COOKIE = 'thieez_device_id';
+const COOKIE_SCOPE_COOKIE = 'thieez_cookie_scope';
 const SESSION_INACTIVITY_DAYS = 30;
 
 type CookieOptions = {
@@ -14,20 +15,37 @@ type CookieOptions = {
   httpOnly: boolean;
   secure: boolean;
   sameSite: 'lax';
+  domain?: string;
 };
+
+function sharedCookieDomain(url: URL): string | undefined {
+  const hostname = url.hostname.toLowerCase();
+  return hostname === 'thieez.com' || hostname.endsWith('.thieez.com')
+    ? '.thieez.com'
+    : undefined;
+}
 
 function cookieOptions(url: URL): CookieOptions {
   return {
     path: '/',
     httpOnly: true,
     secure: url.protocol === 'https:',
-    sameSite: 'lax'
+    sameSite: 'lax',
+    ...(sharedCookieDomain(url) ? { domain: sharedCookieDomain(url) } : {})
   };
 }
 
 export function clearAuthCookies(cookies: Cookies, url: URL): void {
   const options = cookieOptions(url);
-  for (const name of [ACCESS_COOKIE, ACCESS_EXPIRY_COOKIE, REFRESH_COOKIE, DEVICE_COOKIE]) {
+  const legacyOptions = { path: '/' };
+  for (const name of [
+    ACCESS_COOKIE,
+    ACCESS_EXPIRY_COOKIE,
+    REFRESH_COOKIE,
+    DEVICE_COOKIE,
+    COOKIE_SCOPE_COOKIE
+  ]) {
+    cookies.delete(name, legacyOptions);
     cookies.delete(name, options);
   }
 }
@@ -40,6 +58,9 @@ export function setAuthCookies(
 ): void {
   const options = cookieOptions(url);
   const now = Date.now();
+  for (const name of [ACCESS_COOKIE, ACCESS_EXPIRY_COOKIE, REFRESH_COOKIE, DEVICE_COOKIE]) {
+    cookies.delete(name, { path: '/' });
+  }
   cookies.set(ACCESS_COOKIE, tokens.access_token, {
     ...options,
     maxAge: tokens.expires_in
@@ -56,6 +77,12 @@ export function setAuthCookies(
     ...options,
     maxAge: SESSION_INACTIVITY_DAYS * 24 * 60 * 60
   });
+  if (sharedCookieDomain(url)) {
+    cookies.set(COOKIE_SCOPE_COOKIE, 'shared', {
+      ...options,
+      maxAge: SESSION_INACTIVITY_DAYS * 24 * 60 * 60
+    });
+  }
 }
 
 export async function getAccessToken(
@@ -72,6 +99,20 @@ export async function getAccessToken(
     Number.isFinite(expiresAt) &&
     expiresAt > Date.now() + 60_000
   ) {
+    const refreshToken = cookies.get(REFRESH_COOKIE);
+    const deviceId = cookies.get(DEVICE_COOKIE);
+    if (
+      sharedCookieDomain(url) &&
+      cookies.get(COOKIE_SCOPE_COOKIE) !== 'shared' &&
+      refreshToken &&
+      deviceId
+    ) {
+      setAuthCookies(cookies, url, {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_in: Math.floor((expiresAt - Date.now()) / 1000)
+      }, deviceId);
+    }
     return accessToken;
   }
 

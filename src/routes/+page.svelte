@@ -1,5 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApiHealth, getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToProjectUpdates, type ApiHealth, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
@@ -40,9 +41,9 @@
   let authLoading = true;
   let profileMenuOpen = false;
   let accountOpen = false;
-  let adminOpen = false;
+  let adminOpen = data.isDashboard;
   let adminAccess: AdminAccessData | null = null;
-  let adminLoading = false;
+  let adminLoading = data.isDashboard;
   let adminError = '';
   let adminMessage = '';
   let adminEmail = '';
@@ -202,6 +203,14 @@
       const authTask = restoreAuth()
         .then((session) => {
           authSession = session;
+          if (data.isDashboard) {
+            if (session?.user?.is_admin === true) {
+              adminOpen = true;
+              void refreshAdminAccess();
+            } else {
+              void goto('/');
+            }
+          }
           if (session) {
             authRefreshTimer = window.setInterval(() => {
               void restoreAuth()
@@ -318,9 +327,12 @@
     profileMenuOpen = false;
     accountOpen = false;
     if (authSession?.user?.is_admin !== true) return;
-    adminOpen = true;
-    adminMessage = '';
-    void refreshAdminAccess();
+    void goto('/dashboard');
+  };
+
+  const closeAdmin = () => {
+    adminOpen = false;
+    void goto('/');
   };
 
   const saveWhitelistSetting = async (enabled: boolean) => {
@@ -625,7 +637,7 @@
       <section class="account-view admin-view" aria-labelledby="admin-heading">
         <div class="account-topline">
           <p class="eyebrow">THIEEZ / DASHBOARD</p>
-          <button class="text-button" onclick={() => adminOpen = false}>Close <span aria-hidden="true">×</span></button>
+          <button class="text-button" onclick={closeAdmin}>Close <span aria-hidden="true">×</span></button>
         </div>
         <h1 id="admin-heading">Access <em>control.</em></h1>
         <p class="lede">Manage API access and administrator permissions. Changes take effect immediately.</p>
