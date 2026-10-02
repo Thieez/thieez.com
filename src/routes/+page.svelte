@@ -505,7 +505,7 @@
     let path = `M0 60 H${firstBeat + cycleWidth * 0.2375}`;
     for (let x = firstBeat; x < monitorWidth; x += cycleWidth) {
       const at = (fraction: number) => x + cycleWidth * fraction;
-      path += `Q${at(0.275)} 60 ${at(0.3)} 54 H${at(0.3375)} L${at(0.38125)} 14 L${at(0.425)} 105 L${at(0.475)} 60 Q${at(0.5125)} 60 ${at(0.55)} 53 Q${at(0.5875)} 60 ${at(0.6375)} 60 H${Math.min(monitorWidth, at(1.2375))}`;
+      path += `Q${at(0.25)} 60 ${at(0.275)} 54 H${at(0.3125)} L${at(0.35625)} 14 L${at(0.4)} 105 L${at(0.45)} 60 Q${at(0.4875)} 60 ${at(0.525)} 53 Q${at(0.5625)} 60 ${at(0.6125)} 60 H${Math.min(monitorWidth, at(1.2375))}`;
     }
     return `${path} H${monitorWidth}`;
   };
@@ -516,7 +516,7 @@
     const firstBeat = cycleWidth * 0.11875;
     for (let x = firstBeat; x < monitorWidth; x += cycleWidth) {
       const at = (fraction: number) => x + cycleWidth * fraction;
-      segments.push(`M${at(0.2375)} 60 H${at(0.6375)}`);
+      segments.push(`M${at(0.2125)} 60 H${at(0.6125)}`);
     }
     return segments.join(' ');
   };
