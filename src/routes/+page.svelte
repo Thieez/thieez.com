@@ -923,16 +923,17 @@
                     d={trace.path}
                   />
                 {/each}
-                {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
-                  <path
-                    class="heartbeat-trace-sweep"
-                    class:heartbeat-trace-up={trace.status === 'up'}
-                    class:heartbeat-trace-down={trace.status === 'down'}
-                    class:heartbeat-trace-paused={trace.status === 'paused'}
-                    class:heartbeat-trace-unknown={trace.status === 'unknown'}
-                    d={trace.path}
-                  />
-                {/each}
+                <g class="heartbeat-trace-sweep">
+                  {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
+                    <path
+                      class:heartbeat-trace-up={trace.status === 'up'}
+                      class:heartbeat-trace-down={trace.status === 'down'}
+                      class:heartbeat-trace-paused={trace.status === 'paused'}
+                      class:heartbeat-trace-unknown={trace.status === 'unknown'}
+                      d={trace.path}
+                    />
+                  {/each}
+                </g>
                 <circle class:heartbeat-ping-down={apiHealth.current_status === 'down'} cx="1196" cy="60" r="3"></circle>
               </svg>
             </div>
