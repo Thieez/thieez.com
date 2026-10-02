@@ -17,6 +17,14 @@ export type AdminAccessData = {
   whitelist_enabled: boolean;
   whitelist: AdminAccessEntry[];
   blacklist: AdminAccessEntry[];
+  apps: Array<{ slug: string; name: string; repository: string }>;
+  app_access: Array<{
+    user_id: string;
+    email: string | null;
+    name: string | null;
+    app_slug: string;
+    granted_at: string | null;
+  }>;
   admins: Array<{ user_id: string; email: string | null; name: string | null }>;
   online_users: Array<{
     user_id: string;
@@ -106,6 +114,19 @@ export async function addAdminAccessEntry(
   reason?: string
 ): Promise<void> {
   await requestAdmin<Record<string, unknown>>('POST', { action, email, reason });
+}
+
+export async function grantAdminAppAccess(email: string, app_slug: string): Promise<void> {
+  await requestAdmin<Record<string, unknown>>('POST', {
+    action: 'grant_app',
+    email,
+    app_slug
+  });
+}
+
+export async function revokeAdminAppAccess(user_id: string, app_slug: string): Promise<void> {
+  const params = new URLSearchParams({ action: 'app', user_id, app_slug });
+  await requestAdmin<Record<string, unknown>>('DELETE', undefined, params);
 }
 
 export async function kickAdminUser(user_id: string, blacklist = false): Promise<void> {

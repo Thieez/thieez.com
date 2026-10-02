@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApiHealth, getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToProjectUpdates, type ApiHealth, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { addAdminAccessEntry, getAdminAccess, getLisnntoLimits, kickAdminUser, logout, removeAdminAccessEntry, restoreAuth, startLogin, updateWhitelistSetting, type AdminAccessData, type AuthSession } from '$lib/auth-client';
+  import { addAdminAccessEntry, getAdminAccess, getLisnntoLimits, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, restoreAuth, revokeAdminAppAccess, startLogin, updateWhitelistSetting, type AdminAccessData, type AuthSession } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -46,6 +46,8 @@
   let adminEmail = '';
   let adminReason = '';
   let adminAction: 'whitelist' | 'blacklist' | 'admin' = 'whitelist';
+  let adminAppEmail = '';
+  let adminAppSlug = '';
   let limits: LisnntoLimits | null = null;
   let limitsLoading = false;
   let limitsError = '';
@@ -296,6 +298,9 @@
     adminError = '';
     try {
       adminAccess = await getAdminAccess();
+      if (!adminAccess.apps.some((app) => app.slug === adminAppSlug)) {
+        adminAppSlug = adminAccess.apps[0]?.slug ?? '';
+      }
     } catch (cause) {
       adminError = cause instanceof Error ? cause.message : 'Could not load access settings.';
     } finally {
@@ -338,6 +343,32 @@
       await refreshAdminAccess();
     } catch (cause) {
       adminError = cause instanceof Error ? cause.message : 'Could not update user access.';
+    }
+  };
+
+  const grantAppAccess = async (event: SubmitEvent) => {
+    event.preventDefault();
+    adminError = '';
+    adminMessage = '';
+    try {
+      await grantAdminAppAccess(adminAppEmail, adminAppSlug);
+      adminAppEmail = '';
+      adminMessage = `Access granted to ${adminAccess?.apps.find((app) => app.slug === adminAppSlug)?.name ?? adminAppSlug}.`;
+      await refreshAdminAccess();
+    } catch (cause) {
+      adminError = cause instanceof Error ? cause.message : 'Could not grant application access.';
+    }
+  };
+
+  const removeAppAccess = async (userId: string, appSlug: string) => {
+    adminError = '';
+    adminMessage = '';
+    try {
+      await revokeAdminAppAccess(userId, appSlug);
+      adminMessage = 'Application access revoked.';
+      await refreshAdminAccess();
+    } catch (cause) {
+      adminError = cause instanceof Error ? cause.message : 'Could not revoke application access.';
     }
   };
 
@@ -618,6 +649,42 @@
             {/if}
             <button class="admin-submit" type="submit">Save permission <span aria-hidden="true">↗</span></button>
           </form>
+          <section class="admin-app-access">
+            <div class="section-heading">
+              <h2>Application access</h2>
+              <span>Published Thieez repositories</span>
+            </div>
+            <form class="admin-entry-form" onsubmit={grantAppAccess}>
+              <label>
+                <span>Email address</span>
+                <input type="email" bind:value={adminAppEmail} required autocomplete="off" placeholder="person@example.com" />
+              </label>
+              <label>
+                <span>Application</span>
+                <select bind:value={adminAppSlug} required disabled={!adminAccess.apps.length}>
+                  {#each adminAccess.apps as app (app.slug)}
+                    <option value={app.slug}>{app.name}</option>
+                  {/each}
+                </select>
+              </label>
+              <button class="admin-submit" type="submit" disabled={!adminAccess.apps.length}>
+                Grant access <span aria-hidden="true">↗</span>
+              </button>
+            </form>
+            {#if adminAccess.app_access.length}
+              {#each adminAccess.app_access as entry (`${entry.user_id}:${entry.app_slug}`)}
+                <div class="admin-list-row">
+                  <span>
+                    <strong>{entry.email || entry.user_id}</strong>
+                    <small>{adminAccess.apps.find((app) => app.slug === entry.app_slug)?.name ?? entry.app_slug}</small>
+                  </span>
+                  <button class="text-button" onclick={() => void removeAppAccess(entry.user_id, entry.app_slug)}>Revoke</button>
+                </div>
+              {/each}
+            {:else}
+              <p class="admin-empty">No application-specific access has been granted.</p>
+            {/if}
+          </section>
           <div class="admin-lists">
             <section class="admin-online-section">
               <div class="section-heading">
