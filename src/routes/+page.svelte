@@ -547,6 +547,21 @@
     return traces;
   };
 
+  const heartbeatBaselines = (points: ApiHealth['points']): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
+    const traces: Array<{ status: ApiHealth['points'][number]['status']; path: string }> = [];
+    const cycleWidth = 1200 / points.length;
+    for (const [index, point] of points.entries()) {
+      const x = index * cycleWidth;
+      let trace = traces.at(-1);
+      if (!trace || trace.status !== point.status) {
+        trace = { status: point.status, path: '' };
+        traces.push(trace);
+      }
+      trace.path += `${trace.path ? ' ' : ''}M${x.toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`;
+    }
+    return traces;
+  };
+
 </script>
 
 <svelte:head>
@@ -898,7 +913,7 @@
             </div>
             <div class="heartbeat-monitor">
               <svg viewBox="0 0 1200 120" preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat from ${healthPointLabel(visibleHeartbeatPoints[0])} to ${healthPointLabel(visibleHeartbeatPoints.at(-1)!)}; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
-                {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
+                {#each heartbeatBaselines(visibleHeartbeatPoints) as trace}
                   <path
                     class="heartbeat-trace-base"
                     class:heartbeat-trace-up={trace.status === 'up'}
