@@ -66,8 +66,7 @@ export async function loadPageData(
   url: URL
 ) {
   const isDashboard = url.pathname === '/dashboard';
-  const accessDeniedReason = url.searchParams.get('access_denied');
-  const accessDenied = accessDeniedReason !== null;
+  const accessDenied = url.searchParams.has('access_denied');
   const accessCheckFailed = url.searchParams.has('access_check_failed');
   setHeaders(
     isDashboard || accessDenied || accessCheckFailed
@@ -102,7 +101,6 @@ export async function loadPageData(
       storage: null,
       renderLimits: null,
       accessDenied,
-      accessDeniedReason,
       accessCheckFailed,
       isDashboard
     };
@@ -142,7 +140,6 @@ export async function loadPageData(
       storage: null,
       renderLimits: null,
       accessDenied,
-      accessDeniedReason,
       accessCheckFailed,
       isDashboard
     };
@@ -182,7 +179,6 @@ export async function loadPageData(
     storage,
     renderLimits,
     accessDenied,
-    accessDeniedReason,
     accessCheckFailed,
     isDashboard
   };
