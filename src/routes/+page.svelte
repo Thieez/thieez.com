@@ -516,7 +516,7 @@
     const firstBeat = cycleWidth * 0.11875;
     for (let x = firstBeat; x < monitorWidth; x += cycleWidth) {
       const at = (fraction: number) => x + cycleWidth * fraction;
-      segments.push(`M${at(0.26)} 60 H${at(0.7)}`);
+      segments.push(`M${at(0.2375)} 60 H${at(0.6375)}`);
     }
     return segments.join(' ');
   };
@@ -867,8 +867,10 @@
                   <defs>
                     <linearGradient id="heartbeat-sweep-gradient">
                       <stop offset="0%" stop-color="white" stop-opacity="0" />
-                      <stop offset="35%" stop-color="white" stop-opacity=".35" />
-                      <stop offset="65%" stop-color="white" />
+                      <stop offset="25%" stop-color="white" stop-opacity="0" />
+                      <stop offset="40%" stop-color="white" />
+                      <stop offset="60%" stop-color="white" />
+                      <stop offset="75%" stop-color="white" stop-opacity="0" />
                       <stop offset="100%" stop-color="white" stop-opacity="0" />
                     </linearGradient>
                     <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={heartbeatMonitorWidth} height="120">
