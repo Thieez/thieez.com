@@ -12,6 +12,7 @@
   let isNote = data.isNote;
   let projectName = data.projectName;
   let accessDenied = data.accessDenied;
+  let accessDeniedReason = data.accessDeniedReason;
   let accessCheckFailed = data.accessCheckFailed;
   let projects: Project[] = data.projects?.value?.projects ?? [];
   let build: LatestBuild | null = data.build?.value ?? null;
@@ -547,6 +548,21 @@
     return traces;
   };
 
+  const heartbeatBaselines = (points: ApiHealth['points']): Array<{ status: ApiHealth['points'][number]['status']; path: string }> => {
+    const traces: Array<{ status: ApiHealth['points'][number]['status']; path: string }> = [];
+    const cycleWidth = 1200 / points.length;
+    for (const [index, point] of points.entries()) {
+      const x = index * cycleWidth;
+      let trace = traces.at(-1);
+      if (!trace || trace.status !== point.status) {
+        trace = { status: point.status, path: '' };
+        traces.push(trace);
+      }
+      trace.path += `${trace.path ? ' ' : ''}M${x.toFixed(2)} 60 H${(x + cycleWidth).toFixed(2)}`;
+    }
+    return traces;
+  };
+
 </script>
 
 <svelte:head>
@@ -623,7 +639,21 @@
       <section class="account-view" aria-labelledby="access-denied-heading">
         <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
         <h1 id="access-denied-heading">No access <em>yet.</em></h1>
-        <p class="lede">Your account hasn’t been granted access to {projectName}.</p>
+        <p class="lede">
+          {#if accessDeniedReason === 'session'}
+            Your sign-in session could not be verified. Sign in on thieez.com, then try again.
+          {:else if accessDeniedReason === 'whitelist'}
+            This account is not on the API whitelist.
+          {:else if accessDeniedReason === 'blocked'}
+            This account is blocked from API access.
+          {:else if accessDeniedReason === 'unpublished'}
+            This application is no longer published.
+          {:else if accessDeniedReason === 'api'}
+            The API could not authorize this request.
+          {:else}
+            The API did not find an access grant for this account and application.
+          {/if}
+        </p>
         <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
       </section>
     {:else if accessCheckFailed}
@@ -898,9 +928,41 @@
             </div>
             <div class="heartbeat-monitor">
               <svg viewBox="0 0 1200 120" preserveAspectRatio="none" role="img" aria-label={`${apiHealth.monitor.name} heartbeat from ${healthPointLabel(visibleHeartbeatPoints[0])} to ${healthPointLabel(visibleHeartbeatPoints.at(-1)!)}; 24-hour uptime ${apiHealth.uptime_percent.toFixed(2)}%`}>
+                <defs>
+                  <mask id="heartbeat-trace-window" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
+                    <rect width="1200" height="120" fill="black" />
+                    <rect class="heartbeat-window-animation" width="840" height="120" fill="white">
+                      <animate attributeName="x" from="0" to="1200" dur="8s" repeatCount="indefinite" />
+                    </rect>
+                    <rect class="heartbeat-window-animation" width="840" height="120" fill="white">
+                      <animate attributeName="x" from="-1200" to="0" dur="8s" repeatCount="indefinite" />
+                    </rect>
+                  </mask>
+                  <mask id="heartbeat-base-window" maskUnits="userSpaceOnUse" x="0" y="0" width="1200" height="120">
+                    <rect width="1200" height="120" fill="white" />
+                    <rect class="heartbeat-window-animation" width="840" height="120" fill="black">
+                      <animate attributeName="x" from="0" to="1200" dur="8s" repeatCount="indefinite" />
+                    </rect>
+                    <rect class="heartbeat-window-animation" width="840" height="120" fill="black">
+                      <animate attributeName="x" from="-1200" to="0" dur="8s" repeatCount="indefinite" />
+                    </rect>
+                  </mask>
+                </defs>
+                {#each heartbeatBaselines(visibleHeartbeatPoints) as trace}
+                  <path
+                    class="heartbeat-trace-base"
+                    mask="url(#heartbeat-base-window)"
+                    class:heartbeat-trace-up={trace.status === 'up'}
+                    class:heartbeat-trace-down={trace.status === 'down'}
+                    class:heartbeat-trace-paused={trace.status === 'paused'}
+                    class:heartbeat-trace-unknown={trace.status === 'unknown'}
+                    d={trace.path}
+                  />
+                {/each}
                 <g class="heartbeat-trace-track">
                   {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
                     <path
+                      mask="url(#heartbeat-trace-window)"
                       class:heartbeat-trace-up={trace.status === 'up'}
                       class:heartbeat-trace-down={trace.status === 'down'}
                       class:heartbeat-trace-paused={trace.status === 'paused'}
@@ -908,17 +970,6 @@
                       d={trace.path}
                     />
                   {/each}
-                  <g transform="translate(1200 0)">
-                    {#each heartbeatTraces(visibleHeartbeatPoints) as trace}
-                      <path
-                        class:heartbeat-trace-up={trace.status === 'up'}
-                        class:heartbeat-trace-down={trace.status === 'down'}
-                        class:heartbeat-trace-paused={trace.status === 'paused'}
-                        class:heartbeat-trace-unknown={trace.status === 'unknown'}
-                        d={trace.path}
-                      />
-                    {/each}
-                  </g>
                 </g>
                 <circle class:heartbeat-ping-down={apiHealth.current_status === 'down'} cx="1196" cy="60" r="3"></circle>
               </svg>
