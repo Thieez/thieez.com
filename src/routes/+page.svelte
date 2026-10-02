@@ -624,14 +624,14 @@
         <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
         <h1 id="access-denied-heading">No access <em>yet.</em></h1>
         <p class="lede">Your account hasn’t been granted access to {projectName}.</p>
-        <a class="text-button" href="https://www.thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
+        <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
       </section>
     {:else if accessCheckFailed}
       <section class="account-view" aria-labelledby="access-check-heading">
         <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
         <h1 id="access-check-heading">Access check <em>unavailable.</em></h1>
         <p class="lede">We couldn’t verify access right now. Please try again shortly.</p>
-        <a class="text-button" href="https://www.thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
+        <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
       </section>
     {:else if adminOpen}
       <section class="account-view admin-view" aria-labelledby="admin-heading">
