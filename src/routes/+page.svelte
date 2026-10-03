@@ -491,12 +491,13 @@
   const availableMetricDefinitions = (): typeof metricDefinitions =>
     metricDefinitions.filter((definition) => metricPoints(definition.name, definition.aggregate).length > 0);
 
-  const heartbeatBeatCount = (): number => Math.max(1, Math.floor(heartbeatMonitorWidth / 120) - 1);
+  const heartbeatBeatCount = (): number => Math.max(1, Math.floor(heartbeatMonitorWidth / 120));
   const heartbeatCycleWidth = (): number => heartbeatMonitorWidth / (heartbeatBeatCount() + 1);
   const heartbeatSweepWidth = (): number => heartbeatCycleWidth();
+  const heartbeatFirstBeat = (): number => heartbeatCycleWidth();
   const heartbeatSweepDuration = (): string =>
-    ((heartbeatMonitorWidth + heartbeatSweepWidth()) / 150).toString();
-  const heartbeatAnimationDuration = (): string => (heartbeatCycleWidth() / 150).toString();
+    ((heartbeatMonitorWidth + heartbeatSweepWidth() + 36) / 150).toFixed(2);
+  const heartbeatAnimationDuration = (): string => (heartbeatCycleWidth() / 150).toFixed(2);
   const prefersReducedMotion = () => browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const heartbeatSignalPath = (monitorWidth: number): string => {
@@ -506,8 +507,7 @@
     for (let index = 0; index < heartbeatBeatCount(); index += 1) {
       const x = firstBeat + index * cycleWidth;
       const at = (fraction: number) => x + cycleWidth * fraction;
-      if (index > 0) path += ` H${at(0.2375)}`;
-      path += `Q${at(0.25)} 60 ${at(0.275)} 54 H${at(0.3125)} L${at(0.35625)} 14 L${at(0.4)} 105 L${at(0.45)} 60 Q${at(0.4875)} 60 ${at(0.525)} 53 Q${at(0.5625)} 60 ${at(0.6125)} 60`;
+      path += `Q${at(0.25)} 60 ${at(0.275)} 54 H${at(0.3125)} L${at(0.35625)} 14 L${at(0.4)} 105 L${at(0.45)} 60 Q${at(0.4875)} 60 ${at(0.525)} 53 Q${at(0.5625)} 60 ${at(0.6125)} 60 H${Math.min(monitorWidth, at(1.2375))}`;
     }
     return `${path} H${monitorWidth}`;
   };
@@ -519,7 +519,7 @@
     for (let index = 0; index < heartbeatBeatCount(); index += 1) {
       const x = firstBeat + index * cycleWidth;
       const at = (fraction: number) => x + cycleWidth * fraction;
-      segments.push(`M${at(0.2375)} 60 H${at(0.6125)}`);
+      segments.push(`M${at(0.2125)} 60 H${at(0.6125)}`);
     }
     return segments.join(' ');
   };
@@ -881,8 +881,8 @@
                       <rect y="0" width={heartbeatSweepWidth()} height="120" fill="url(#heartbeat-sweep-gradient)">
                         <animate
                           attributeName="x"
-                          from={-heartbeatSweepWidth()}
-                          to={heartbeatMonitorWidth}
+                          from={heartbeatFirstBeat() - heartbeatSweepWidth() - 18}
+                          to={heartbeatMonitorWidth + heartbeatFirstBeat() + 18}
                           dur={`${heartbeatSweepDuration()}s`}
                           repeatCount="indefinite"
                         />
