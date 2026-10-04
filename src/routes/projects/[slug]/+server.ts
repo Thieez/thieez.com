@@ -21,12 +21,12 @@ export const GET: RequestHandler = async ({ cookies, fetch, params, url }) => {
   const failedUrl = `${projectUrl}?access_check_failed=true`;
 
   try {
-    const accessToken = await getAccessToken(cookies, url, fetch);
+    let accessToken = await getAccessToken(cookies, url, fetch);
     if (!accessToken) {
       return redirectNoStore(deniedUrl);
     }
 
-    const response = await fetch(
+    let response = await fetch(
       `${AUTH_BASE}/app-access?app_slug=${encodeURIComponent(slug)}`,
       {
         headers: {
@@ -35,6 +35,21 @@ export const GET: RequestHandler = async ({ cookies, fetch, params, url }) => {
         }
       }
     );
+    if (response.status === 401) {
+      accessToken = await getAccessToken(cookies, url, fetch, true);
+      if (!accessToken) {
+        return redirectNoStore(deniedUrl);
+      }
+      response = await fetch(
+        `${AUTH_BASE}/app-access?app_slug=${encodeURIComponent(slug)}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${accessToken}`
+          }
+        }
+      );
+    }
     if (response.status === 401 || response.status === 403) {
       return redirectNoStore(deniedUrl);
     }
