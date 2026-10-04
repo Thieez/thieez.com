@@ -55,8 +55,12 @@
   let adminEmail = '';
   let adminReason = '';
   let adminAction: 'whitelist' | 'blacklist' | 'admin' = 'whitelist';
-  let adminAppEmail = '';
-  let adminAppSlug = '';
+  let adminUserSearch = '';
+  let adminUserPage = 1;
+  let expandedAdminUsers = new Set<string>();
+  let pendingAppGrants = new Set<string>();
+  let appGrantErrors: Record<string, string> = {};
+  let appGrantMessages: Record<string, string> = {};
   let limits: LisnntoLimits | null = null;
   let limitsLoading = false;
   let limitsError = '';
@@ -307,14 +311,12 @@
     }
   };
 
-  const refreshAdminAccess = async () => {
+  const refreshAdminAccess = async (page = adminUserPage) => {
     adminLoading = true;
     adminError = '';
     try {
-      adminAccess = await getAdminAccess();
-      if (!adminAccess.apps.some((app) => app.slug === adminAppSlug)) {
-        adminAppSlug = adminAccess.apps[0]?.slug ?? '';
-      }
+      adminAccess = await getAdminAccess(adminUserSearch, page);
+      adminUserPage = adminAccess.page;
     } catch (cause) {
       adminError = cause instanceof Error ? cause.message : 'Could not load access settings.';
     } finally {
@@ -407,29 +409,55 @@
     }
   };
 
-  const grantAppAccess = async (event: SubmitEvent) => {
+  const searchAdminUsers = (event: SubmitEvent) => {
     event.preventDefault();
-    adminError = '';
-    adminMessage = '';
-    try {
-      await grantAdminAppAccess(adminAppEmail, adminAppSlug);
-      adminAppEmail = '';
-      adminMessage = `Access granted to ${adminAccess?.apps.find((app) => app.slug === adminAppSlug)?.name ?? adminAppSlug}.`;
-      await refreshAdminAccess();
-    } catch (cause) {
-      adminError = cause instanceof Error ? cause.message : 'Could not grant application access.';
-    }
+    void refreshAdminAccess(1);
   };
 
-  const removeAppAccess = async (userId: string, appSlug: string) => {
-    adminError = '';
-    adminMessage = '';
+  const toggleAdminUserProjects = (userId: string) => {
+    const expanded = new Set(expandedAdminUsers);
+    if (expanded.has(userId)) expanded.delete(userId);
+    else expanded.add(userId);
+    expandedAdminUsers = expanded;
+  };
+
+  const toggleAdminAppGrant = async (
+    userId: string,
+    appSlug: string,
+    shouldGrant: boolean,
+    checkbox: HTMLInputElement
+  ) => {
+    const key = `${userId}:${appSlug}`;
+    checkbox.checked = !shouldGrant;
+    if (pendingAppGrants.has(key)) return;
+    pendingAppGrants = new Set([...pendingAppGrants, key]);
+    appGrantErrors = { ...appGrantErrors, [key]: '' };
+    appGrantMessages = { ...appGrantMessages, [key]: '' };
     try {
-      await revokeAdminAppAccess(userId, appSlug);
-      adminMessage = 'Application access revoked.';
-      await refreshAdminAccess();
+      if (shouldGrant) await grantAdminAppAccess(userId, appSlug);
+      else await revokeAdminAppAccess(userId, appSlug);
+      if (adminAccess) {
+        adminAccess = {
+          ...adminAccess,
+          users: adminAccess.users.map((user) => {
+            if (user.user_id !== userId) return user;
+            const app_slugs = new Set(user.app_slugs);
+            if (shouldGrant) app_slugs.add(appSlug);
+            else app_slugs.delete(appSlug);
+            return { ...user, app_slugs: [...app_slugs] };
+          })
+        };
+      }
+      appGrantMessages = { ...appGrantMessages, [key]: 'Saved.' };
     } catch (cause) {
-      adminError = cause instanceof Error ? cause.message : 'Could not revoke application access.';
+      appGrantErrors = {
+        ...appGrantErrors,
+        [key]: cause instanceof Error ? cause.message : 'Could not update project access.'
+      };
+    } finally {
+      const pending = new Set(pendingAppGrants);
+      pending.delete(key);
+      pendingAppGrants = pending;
     }
   };
 
@@ -722,7 +750,7 @@
         {#if adminError}
           <div class="state-panel error-panel admin-feedback" role="alert">
             <strong>Couldn’t update access settings.</strong><span>{adminError}</span>
-            <button class="text-button" onclick={refreshAdminAccess}>Try again</button>
+            <button class="text-button" onclick={() => void refreshAdminAccess()}>Try again</button>
           </div>
         {:else if adminMessage}
           <div class="state-panel admin-feedback" role="status">{adminMessage}</div>
@@ -759,76 +787,115 @@
             {/if}
             <button class="admin-submit" type="submit">Save permission <span aria-hidden="true">↗</span></button>
           </form>
-          <section class="admin-app-access">
+          <section class="admin-app-access" aria-labelledby="app-access-heading">
             <div class="section-heading">
-              <h2>Application access</h2>
-              <span>Published Thieez repositories</span>
+              <h2 id="app-access-heading">Project access</h2>
+              <span>{adminAccess.apps.length} published projects</span>
             </div>
-            <p class="admin-empty">
-              This list shows explicit application grants. Administrators can grant themselves access here.
-            </p>
-            <form class="admin-entry-form" onsubmit={grantAppAccess}>
-              <label>
-                <span>Email address</span>
-                <input type="email" bind:value={adminAppEmail} required autocomplete="off" placeholder="person@example.com" />
-              </label>
-              <label>
-                <span>Application</span>
-                <select bind:value={adminAppSlug} required disabled={!adminAccess.apps.length}>
-                  {#each adminAccess.apps as app (app.slug)}
-                    <option value={app.slug}>{app.name}</option>
-                  {/each}
-                </select>
-              </label>
-              <button class="admin-submit" type="submit" disabled={!adminAccess.apps.length}>
-                Grant access <span aria-hidden="true">↗</span>
+            <p class="admin-empty">Every project grant is explicit, including access for administrators.</p>
+            <form class="admin-roster-search" onsubmit={searchAdminUsers}>
+              <label for="admin-user-search">Find a registered user</label>
+              <input
+                id="admin-user-search"
+                type="search"
+                bind:value={adminUserSearch}
+                maxlength="200"
+                placeholder="Search by email or name"
+                autocomplete="off"
+              />
+              <button class="admin-submit" type="submit" disabled={adminLoading}>
+                Search <span aria-hidden="true">↗</span>
               </button>
             </form>
-            {#if adminAccess.app_access.length}
-              {#each adminAccess.app_access as entry (`${entry.user_id}:${entry.app_slug}`)}
-                <div class="admin-list-row">
-                  <span>
-                    <strong>{entry.email || entry.user_id}</strong>
-                    <small>{adminAccess.apps.find((app) => app.slug === entry.app_slug)?.name ?? entry.app_slug}</small>
-                  </span>
-                  <button class="text-button" onclick={() => void removeAppAccess(entry.user_id, entry.app_slug)}>Revoke</button>
-                </div>
-              {/each}
+            <div class="section-heading roster-heading">
+              <span>{adminUserSearch.trim() ? `Matches for “${adminUserSearch.trim()}”` : 'Registered users'}</span>
+              <span>{adminAccess.users.length} shown · page {adminAccess.page}</span>
+              <button class="text-button" onclick={() => void refreshAdminAccess()}>Refresh</button>
+            </div>
+            {#if adminLoading && !adminAccess.users.length}
+              <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading registered users…</span></div>
+            {:else if adminAccess.users.length}
+              <div class="admin-roster">
+                {#each adminAccess.users as rosterUser (rosterUser.user_id)}
+                  <article class="admin-roster-user">
+                    <div class="admin-roster-row">
+                      <div class="admin-roster-identity">
+                        <strong>{rosterUser.name || rosterUser.email || rosterUser.user_id}</strong>
+                        {#if rosterUser.name && rosterUser.email}<small>{rosterUser.email}</small>{/if}
+                        <small>
+                          <span class:roster-online={rosterUser.is_online} class="roster-presence">
+                            <i aria-hidden="true"></i>{rosterUser.is_online ? 'Online' : 'Offline'}
+                          </span>
+                          {#if rosterUser.is_admin}<span class="roster-admin-label">Administrator</span>{/if}
+                        </small>
+                      </div>
+                      <div class="admin-roster-actions">
+                        <button
+                          class="text-button roster-project-toggle"
+                          aria-expanded={expandedAdminUsers.has(rosterUser.user_id)}
+                          aria-controls={`projects-${rosterUser.user_id}`}
+                          onclick={() => toggleAdminUserProjects(rosterUser.user_id)}
+                        >
+                          {expandedAdminUsers.has(rosterUser.user_id) ? 'Hide projects' : 'Projects'}
+                          <span>{rosterUser.app_slugs.length}/{adminAccess.apps.length}</span>
+                        </button>
+                        {#if rosterUser.user_id !== authSession?.user?.id}
+                          <button class="text-button" onclick={() => void kickOnlineUser(rosterUser.user_id)}>Sign out</button>
+                          <button class="text-button admin-block-button" onclick={() => void kickOnlineUser(rosterUser.user_id, true)}>Blacklist + sign out</button>
+                        {:else}
+                          <span class="admin-self-label">You</span>
+                        {/if}
+                      </div>
+                    </div>
+                    {#if expandedAdminUsers.has(rosterUser.user_id)}
+                      <div class="admin-project-checklist" id={`projects-${rosterUser.user_id}`}>
+                        {#if adminAccess.apps.length}
+                          {#each adminAccess.apps as app (app.slug)}
+                            {@const grantKey = `${rosterUser.user_id}:${app.slug}`}
+                            <label class="admin-project-option">
+                              <input
+                                type="checkbox"
+                                checked={rosterUser.app_slugs.includes(app.slug)}
+                                disabled={pendingAppGrants.has(grantKey)}
+                                aria-label={`${app.name} access for ${rosterUser.email || rosterUser.name || rosterUser.user_id}`}
+                                aria-describedby={appGrantErrors[grantKey] ? `grant-error-${grantKey}` : undefined}
+                                onchange={(event) => void toggleAdminAppGrant(
+                                  rosterUser.user_id,
+                                  app.slug,
+                                  event.currentTarget.checked,
+                                  event.currentTarget
+                                )}
+                              />
+                              <span>{app.name}<small>{app.repository}</small></span>
+                              {#if pendingAppGrants.has(grantKey)}
+                                <small class="grant-feedback" aria-live="polite">Saving…</small>
+                              {:else if appGrantErrors[grantKey]}
+                                <small class="grant-error" id={`grant-error-${grantKey}`} role="alert">{appGrantErrors[grantKey]}</small>
+                              {:else if appGrantMessages[grantKey]}
+                                <small class="grant-feedback" aria-live="polite">{appGrantMessages[grantKey]}</small>
+                              {/if}
+                            </label>
+                          {/each}
+                        {:else}
+                          <p class="admin-empty">No published projects are available.</p>
+                        {/if}
+                      </div>
+                    {/if}
+                  </article>
+                {/each}
+              </div>
             {:else}
-              <p class="admin-empty">No application-specific access has been granted.</p>
+              <p class="admin-empty">
+                {adminUserSearch.trim() ? 'No registered users match this search.' : 'No registered users found.'}
+              </p>
             {/if}
+            <nav class="admin-roster-pagination" aria-label="User roster pages">
+              <button class="text-button" disabled={adminLoading || adminAccess.page <= 1} onclick={() => void refreshAdminAccess(adminAccess!.page - 1)}>← Previous</button>
+              <span>Page {adminAccess.page}</span>
+              <button class="text-button" disabled={adminLoading || !adminAccess.has_more} onclick={() => void refreshAdminAccess(adminAccess!.page + 1)}>Next →</button>
+            </nav>
           </section>
           <div class="admin-lists">
-            <section class="admin-online-section">
-              <div class="section-heading">
-                <h2>Online users</h2>
-                <span>{adminAccess.online_users.length} active</span>
-                <button class="text-button" onclick={refreshAdminAccess}>Refresh</button>
-              </div>
-              {#if adminAccess.online_users.length}
-                {#each adminAccess.online_users as onlineUser (onlineUser.user_id)}
-                  <div class="admin-list-row">
-                    <span>
-                      <strong>{onlineUser.email || onlineUser.user_id}</strong>
-                      <small>
-                        {onlineUser.name ? `${onlineUser.name} · ` : ''}Active {new Intl.DateTimeFormat('en', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(onlineUser.last_active_at))}
-                      </small>
-                      {#if onlineUser.is_admin}
-                        <small>Administrator · application access is granted separately</small>
-                      {/if}
-                    </span>
-                    {#if onlineUser.user_id !== authSession?.user?.id}
-                      <div class="admin-online-actions">
-                        <button class="text-button" onclick={() => void kickOnlineUser(onlineUser.user_id)}>Kick</button>
-                        <button class="text-button admin-block-button" onclick={() => void kickOnlineUser(onlineUser.user_id, true)}>Blacklist + kick</button>
-                      </div>
-                    {:else}
-                      <span class="admin-self-label">You</span>
-                    {/if}
-                  </div>
-                {/each}
-              {:else}<p class="admin-empty">No users are online.</p>{/if}
-            </section>
             <section>
               <div class="section-heading"><h2>Whitelist</h2><span>{adminAccess.whitelist.length} accounts</span></div>
               {#if adminAccess.whitelist.length}

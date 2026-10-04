@@ -18,21 +18,19 @@ export type AdminAccessData = {
   whitelist: AdminAccessEntry[];
   blacklist: AdminAccessEntry[];
   apps: Array<{ slug: string; name: string; repository: string }>;
-  app_access: Array<{
+  users: Array<{
     user_id: string;
     email: string | null;
     name: string | null;
-    app_slug: string;
-    granted_at: string | null;
-  }>;
-  admins: Array<{ user_id: string; email: string | null; name: string | null }>;
-  online_users: Array<{
-    user_id: string;
-    email: string | null;
-    name: string | null;
-    last_active_at: string;
+    is_online: boolean;
+    last_active_at: string | null;
     is_admin: boolean;
+    app_slugs: string[];
   }>;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+  admins: Array<{ user_id: string; email: string | null; name: string | null }>;
 };
 
 export type UserApiKey = {
@@ -109,8 +107,10 @@ async function requestAdmin<T>(
   return payload;
 }
 
-export function getAdminAccess(): Promise<AdminAccessData> {
-  return requestAdmin<AdminAccessData>('GET');
+export function getAdminAccess(search = '', page = 1): Promise<AdminAccessData> {
+  const query = new URLSearchParams({ page: String(page), page_size: '50' });
+  if (search.trim()) query.set('search', search.trim());
+  return requestAdmin<AdminAccessData>('GET', undefined, query);
 }
 
 async function requestApiKeys<T>(
@@ -157,10 +157,10 @@ export async function addAdminAccessEntry(
   await requestAdmin<Record<string, unknown>>('POST', { action, email, reason });
 }
 
-export async function grantAdminAppAccess(email: string, app_slug: string): Promise<void> {
+export async function grantAdminAppAccess(user_id: string, app_slug: string): Promise<void> {
   await requestAdmin<Record<string, unknown>>('POST', {
     action: 'grant_app',
-    email,
+    user_id,
     app_slug
   });
 }
