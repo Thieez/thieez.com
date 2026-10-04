@@ -575,10 +575,7 @@
 
   const heartbeatBeatCount = (): number => Math.max(1, Math.floor(heartbeatMonitorWidth / 120));
   const heartbeatCycleWidth = (): number => heartbeatMonitorWidth / heartbeatBeatCount();
-  const heartbeatVisibleBeatCount = (): number =>
-    Math.min(heartbeatBeatCount(), Math.max(1, Math.floor(heartbeatMonitorWidth / 240)));
-  const heartbeatSweepWidth = (): number =>
-    Math.min(heartbeatMonitorWidth, heartbeatCycleWidth() * (heartbeatVisibleBeatCount() + 1));
+  const heartbeatSweepWidth = (): number => heartbeatMonitorWidth;
   const heartbeatFirstBeat = (): number => heartbeatCycleWidth();
   const heartbeatSweepStart = (): number => heartbeatFirstBeat() - heartbeatSweepWidth() - 18;
   const heartbeatSweepDuration = (): string => (heartbeatMonitorWidth / 150).toFixed(2);
