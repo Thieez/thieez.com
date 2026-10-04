@@ -575,43 +575,36 @@
 
   const heartbeatBeatCount = (): number => Math.max(1, Math.floor(heartbeatMonitorWidth / 120));
   const heartbeatCycleWidth = (): number => heartbeatMonitorWidth / heartbeatBeatCount();
-  const heartbeatWaveBeatCount = (): number => Math.max(1, Math.floor(heartbeatBeatCount() / 2));
-  const heartbeatWaveGapBeatCount = (): number =>
-    Math.max(1, Math.ceil(heartbeatWaveBeatCount() / 3));
-  const heartbeatWavePeriod = (): number =>
-    heartbeatCycleWidth() * (heartbeatWaveBeatCount() + heartbeatWaveGapBeatCount());
-  const heartbeatAnimationDuration = (): string =>
-    (heartbeatWavePeriod() / 150).toFixed(2);
+  const heartbeatVisibleBeatCount = (): number =>
+    Math.min(heartbeatBeatCount(), Math.max(1, Math.floor(heartbeatMonitorWidth / 240)));
+  const heartbeatSweepWidth = (): number =>
+    Math.min(heartbeatMonitorWidth, heartbeatCycleWidth() * (heartbeatVisibleBeatCount() + 1));
+  const heartbeatFirstBeat = (): number => heartbeatCycleWidth();
+  const heartbeatSweepStart = (): number => heartbeatFirstBeat() - heartbeatSweepWidth() - 18;
+  const heartbeatSweepDuration = (): string => (heartbeatMonitorWidth / 150).toFixed(2);
+  const heartbeatAnimationDuration = (): string => (heartbeatCycleWidth() / 150).toFixed(2);
   const prefersReducedMotion = () => browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const heartbeatSignalPath = (monitorWidth: number): string => {
     const cycleWidth = heartbeatCycleWidth();
-    const wavePeriod = heartbeatWavePeriod();
-    let path = '';
-    for (let waveStart = -wavePeriod; waveStart < monitorWidth + wavePeriod; waveStart += wavePeriod) {
-      path += `M${waveStart} 60 H${waveStart + cycleWidth * 0.2375}`;
-      for (let index = 0; index < heartbeatWaveBeatCount(); index += 1) {
-        const x = waveStart + index * cycleWidth;
-        const at = (fraction: number) => x + cycleWidth * fraction;
-        path += `Q${at(0.25)} 60 ${at(0.275)} 54 H${at(0.3125)} L${at(0.35625)} 14 L${at(0.4)} 105 L${at(0.45)} 60 Q${at(0.4875)} 60 ${at(0.525)} 53 Q${at(0.5625)} 60 ${at(0.6125)} 60`;
-        if (index < heartbeatWaveBeatCount() - 1) {
-          path += ` H${waveStart + (index + 1) * cycleWidth + cycleWidth * 0.2375}`;
-        }
-      }
+    const firstBeat = 0;
+    let path = `M0 60 H${firstBeat + cycleWidth * 0.2375}`;
+    for (let index = 0; index < heartbeatBeatCount(); index += 1) {
+      const x = firstBeat + index * cycleWidth;
+      const at = (fraction: number) => x + cycleWidth * fraction;
+      path += `Q${at(0.25)} 60 ${at(0.275)} 54 H${at(0.3125)} L${at(0.35625)} 14 L${at(0.4)} 105 L${at(0.45)} 60 Q${at(0.4875)} 60 ${at(0.525)} 53 Q${at(0.5625)} 60 ${at(0.6125)} 60 H${Math.min(monitorWidth, at(1.2375))}`;
     }
-    return path;
+    return `${path} H${monitorWidth}`;
   };
 
   const heartbeatBaselineGapPath = (monitorWidth: number): string => {
     const segments: string[] = [];
     const cycleWidth = heartbeatCycleWidth();
-    const wavePeriod = heartbeatWavePeriod();
-    for (let waveStart = -wavePeriod; waveStart < monitorWidth + wavePeriod; waveStart += wavePeriod) {
-      for (let index = 0; index < heartbeatWaveBeatCount(); index += 1) {
-        const x = waveStart + index * cycleWidth;
-        const at = (fraction: number) => x + cycleWidth * fraction;
-        segments.push(`M${at(0.2125)} 60 H${at(0.6125)}`);
-      }
+    const firstBeat = 0;
+    for (let index = 0; index < heartbeatBeatCount(); index += 1) {
+      const x = firstBeat + index * cycleWidth;
+      const at = (fraction: number) => x + cycleWidth * fraction;
+      segments.push(`M${at(0.2125)} 60 H${at(0.6125)}`);
     }
     return segments.join(' ');
   };
@@ -1056,26 +1049,51 @@
                 aria-hidden="true"
               />
               {#if !prefersReducedMotion()}
-                <g class:heartbeat-trace-hidden={heartbeatConnection !== 'connected'}>
-                  <animateTransform
-                    attributeName="transform"
-                    type="translate"
-                    from="0 0"
-                    to={`${-heartbeatWavePeriod()} 0`}
-                    dur={`${heartbeatAnimationDuration()}s`}
-                    repeatCount="indefinite"
-                  />
-                  <path
-                    class="heartbeat-trace-cut"
-                    d={heartbeatBaselineGapPath(heartbeatMonitorWidth + heartbeatCycleWidth())}
-                    aria-hidden="true"
-                  />
-                  <path
-                    class="heartbeat-trace-up"
-                    d={heartbeatSignalPath(heartbeatMonitorWidth + heartbeatCycleWidth())}
-                    aria-hidden="true"
-                  />
-                </g>
+                <defs>
+                  <linearGradient id="heartbeat-sweep-gradient">
+                    <stop offset="0%" stop-color="white" stop-opacity="0" />
+                    <stop offset="4%" stop-color="white" stop-opacity="0" />
+                    <stop offset="8%" stop-color="white" />
+                    <stop offset="92%" stop-color="white" />
+                    <stop offset="96%" stop-color="white" stop-opacity="0" />
+                    <stop offset="100%" stop-color="white" stop-opacity="0" />
+                  </linearGradient>
+                  <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={heartbeatMonitorWidth} height="120">
+                    <rect width={heartbeatMonitorWidth} height="120" fill="black" />
+                    <rect y="0" width={heartbeatSweepWidth()} height="120" fill="url(#heartbeat-sweep-gradient)">
+                      <animate
+                        attributeName="x"
+                        from={heartbeatSweepStart()}
+                        to={heartbeatSweepStart() + heartbeatMonitorWidth}
+                        dur={`${heartbeatSweepDuration()}s`}
+                        repeatCount="indefinite"
+                      />
+                    </rect>
+                    <rect y="0" width={heartbeatSweepWidth()} height="120" fill="url(#heartbeat-sweep-gradient)">
+                      <animate
+                        attributeName="x"
+                        from={heartbeatSweepStart() - heartbeatMonitorWidth}
+                        to={heartbeatSweepStart()}
+                        dur={`${heartbeatSweepDuration()}s`}
+                        repeatCount="indefinite"
+                      />
+                    </rect>
+                  </mask>
+                </defs>
+                <path
+                  class="heartbeat-trace-cut"
+                  class:heartbeat-trace-hidden={heartbeatConnection !== 'connected'}
+                  d={heartbeatBaselineGapPath(heartbeatMonitorWidth)}
+                  mask="url(#heartbeat-sweep-mask)"
+                  aria-hidden="true"
+                />
+                <path
+                  class="heartbeat-trace-up"
+                  class:heartbeat-trace-hidden={heartbeatConnection !== 'connected'}
+                  d={heartbeatSignalPath(heartbeatMonitorWidth)}
+                  mask="url(#heartbeat-sweep-mask)"
+                  aria-hidden="true"
+                />
               {/if}
               {#if heartbeatConnection !== 'connected'}
                 {#if heartbeatConnection === 'disconnected'}
