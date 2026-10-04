@@ -31,6 +31,7 @@ export type AdminAccessData = {
     email: string | null;
     name: string | null;
     last_active_at: string;
+    is_admin: boolean;
   }>;
 };
 

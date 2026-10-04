@@ -764,6 +764,9 @@
               <h2>Application access</h2>
               <span>Published Thieez repositories</span>
             </div>
+            <p class="admin-empty">
+              This list shows explicit application grants. Administrators can grant themselves access here.
+            </p>
             <form class="admin-entry-form" onsubmit={grantAppAccess}>
               <label>
                 <span>Email address</span>
@@ -810,6 +813,9 @@
                       <small>
                         {onlineUser.name ? `${onlineUser.name} · ` : ''}Active {new Intl.DateTimeFormat('en', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(onlineUser.last_active_at))}
                       </small>
+                      {#if onlineUser.is_admin}
+                        <small>Administrator · application access is granted separately</small>
+                      {/if}
                     </span>
                     {#if onlineUser.user_id !== authSession?.user?.id}
                       <div class="admin-online-actions">
