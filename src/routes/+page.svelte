@@ -1039,35 +1039,51 @@
           </div>
           <div class="heartbeat-monitor" use:observeHeartbeatMonitor aria-live="polite">
             <svg viewBox={`0 0 ${heartbeatMonitorWidth} 120`} preserveAspectRatio="none" role="img" aria-label={heartbeatConnection === 'connected' ? 'Live API heartbeat received directly over WebSocket' : heartbeatConnection === 'disconnected' ? 'No heartbeat; API WebSocket is unavailable' : 'Connecting directly to the API heartbeat'}>
-              {#if heartbeatConnection === 'connected'}
-                <path class="heartbeat-trace-up heartbeat-trace-dim" d={`M0 60 H${heartbeatMonitorWidth}`} aria-hidden="true" />
-                {#if !prefersReducedMotion()}
-                  <defs>
-                    <linearGradient id="heartbeat-sweep-gradient">
-                      <stop offset="0%" stop-color="white" stop-opacity="0" />
-                      <stop offset="18%" stop-color="white" stop-opacity="0" />
-                      <stop offset="24%" stop-color="white" />
-                      <stop offset="64%" stop-color="white" />
-                      <stop offset="70%" stop-color="white" stop-opacity="0" />
-                      <stop offset="100%" stop-color="white" stop-opacity="0" />
-                    </linearGradient>
-                    <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={heartbeatMonitorWidth} height="120">
-                      <rect width={heartbeatMonitorWidth} height="120" fill="black" />
-                      <rect y="0" width={heartbeatSweepWidth()} height="120" fill="url(#heartbeat-sweep-gradient)">
-                        <animate
-                          attributeName="x"
-                          from={heartbeatFirstBeat() - heartbeatSweepWidth() - 18}
-                          to={heartbeatMonitorWidth + heartbeatFirstBeat() + 18}
-                          dur={`${heartbeatSweepDuration()}s`}
-                          repeatCount="indefinite"
-                        />
-                      </rect>
-                    </mask>
-                  </defs>
-                  <path class="heartbeat-trace-cut" d={heartbeatBaselineGapPath(heartbeatMonitorWidth)} mask="url(#heartbeat-sweep-mask)" aria-hidden="true" />
-                  <path class="heartbeat-trace-up" d={heartbeatSignalPath(heartbeatMonitorWidth)} mask="url(#heartbeat-sweep-mask)" aria-hidden="true" />
-                {/if}
-              {:else}
+              <path
+                class="heartbeat-trace-up heartbeat-trace-dim"
+                class:heartbeat-trace-hidden={heartbeatConnection !== 'connected'}
+                d={`M0 60 H${heartbeatMonitorWidth}`}
+                aria-hidden="true"
+              />
+              {#if !prefersReducedMotion()}
+                <defs>
+                  <linearGradient id="heartbeat-sweep-gradient">
+                    <stop offset="0%" stop-color="white" stop-opacity="0" />
+                    <stop offset="18%" stop-color="white" stop-opacity="0" />
+                    <stop offset="24%" stop-color="white" />
+                    <stop offset="64%" stop-color="white" />
+                    <stop offset="70%" stop-color="white" stop-opacity="0" />
+                    <stop offset="100%" stop-color="white" stop-opacity="0" />
+                  </linearGradient>
+                  <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={heartbeatMonitorWidth} height="120">
+                    <rect width={heartbeatMonitorWidth} height="120" fill="black" />
+                    <rect y="0" width={heartbeatSweepWidth()} height="120" fill="url(#heartbeat-sweep-gradient)">
+                      <animate
+                        attributeName="x"
+                        from={heartbeatFirstBeat() - heartbeatSweepWidth() - 18}
+                        to={heartbeatMonitorWidth + heartbeatFirstBeat() + 18}
+                        dur={`${heartbeatSweepDuration()}s`}
+                        repeatCount="indefinite"
+                      />
+                    </rect>
+                  </mask>
+                </defs>
+                <path
+                  class="heartbeat-trace-cut"
+                  class:heartbeat-trace-hidden={heartbeatConnection !== 'connected'}
+                  d={heartbeatBaselineGapPath(heartbeatMonitorWidth)}
+                  mask="url(#heartbeat-sweep-mask)"
+                  aria-hidden="true"
+                />
+                <path
+                  class="heartbeat-trace-up"
+                  class:heartbeat-trace-hidden={heartbeatConnection !== 'connected'}
+                  d={heartbeatSignalPath(heartbeatMonitorWidth)}
+                  mask="url(#heartbeat-sweep-mask)"
+                  aria-hidden="true"
+                />
+              {/if}
+              {#if heartbeatConnection !== 'connected'}
                 {#if heartbeatConnection === 'disconnected'}
                   <path class="heartbeat-trace-down heartbeat-trace-dim" d={`M0 60 H${heartbeatMonitorWidth}`} />
                 {/if}

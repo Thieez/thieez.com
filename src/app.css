@@ -172,6 +172,7 @@ h1 em{font-style:normal;color:#8d8a82}
 .heartbeat-monitor .heartbeat-trace-cut{stroke:#080b08;stroke-width:8;filter:none}
 .heartbeat-monitor .heartbeat-trace-down{stroke:#e56b5d;filter:drop-shadow(0 0 4px rgba(229,107,93,.65))}
 .heartbeat-monitor .heartbeat-trace-dim{opacity:.35;filter:none}
+.heartbeat-monitor .heartbeat-trace-hidden{opacity:0}
 .heartbeat-monitor .heartbeat-trace-paused{stroke:#77796f}
 .heartbeat-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px}
 .heartbeat-legend span{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)}
