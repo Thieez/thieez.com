@@ -93,6 +93,7 @@ export async function loadPageData(
     return {
       isLisnnto,
       isNote,
+      projectSlug,
       projectName,
       build: null,
       projects: null,
@@ -131,6 +132,7 @@ export async function loadPageData(
     return {
       isLisnnto,
       isNote,
+      projectSlug,
       projectName,
       build,
       projects: null,
@@ -168,6 +170,7 @@ export async function loadPageData(
   return {
     isLisnnto,
     isNote,
+    projectSlug,
     projectName,
     build: null,
     projects,

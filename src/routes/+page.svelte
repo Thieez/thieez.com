@@ -10,6 +10,7 @@
 
   let isLisnnto = data.isLisnnto;
   let isNote = data.isNote;
+  let projectSlug = data.projectSlug;
   let projectName = data.projectName;
   let accessDenied = data.accessDenied;
   let accessCheckFailed = data.accessCheckFailed;
@@ -87,7 +88,7 @@
       ? hostname.slice(0, -'.thieez.com'.length)
       : '';
     const configuredProject = params.get('project')?.trim().toLowerCase() || '';
-    const projectSlug = configuredProject || (hostProject !== 'www' && hostProject !== 'api' ? hostProject : '');
+    projectSlug = configuredProject || (hostProject !== 'www' && hostProject !== 'api' ? hostProject : '');
     projectName = projectSlug
       .split('-')
       .filter(Boolean)
@@ -652,6 +653,9 @@
         <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
         <h1 id="access-denied-heading">No access <em>yet.</em></h1>
         <p class="lede">Your account hasn’t been granted access to {projectName}.</p>
+        {#if isLisnnto || isNote}
+          <a class="text-button" href={`/projects/${encodeURIComponent(projectSlug)}`}>Check access again <span aria-hidden="true">↗</span></a>
+        {/if}
         <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
       </section>
     {:else if accessCheckFailed}

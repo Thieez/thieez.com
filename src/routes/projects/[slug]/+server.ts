@@ -1,10 +1,20 @@
-import { redirect, type RequestHandler } from '@sveltejs/kit';
+import type { RequestHandler } from '@sveltejs/kit';
 import { AUTH_BASE } from '$lib/api';
 import { getAccessToken } from '$lib/server/auth';
 
+function redirectNoStore(location: string): Response {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      location,
+      'cache-control': 'no-store, max-age=0'
+    }
+  });
+}
+
 export const GET: RequestHandler = async ({ cookies, fetch, params, url }) => {
   const routeSlug = params.slug;
-  if (!routeSlug) redirect(303, '/');
+  if (!routeSlug) return redirectNoStore('/');
   const slug = routeSlug.toLowerCase();
   const projectUrl = `https://${slug}.thieez.com/`;
   const deniedUrl = `${projectUrl}?access_denied=true`;
@@ -13,7 +23,7 @@ export const GET: RequestHandler = async ({ cookies, fetch, params, url }) => {
   try {
     const accessToken = await getAccessToken(cookies, url, fetch);
     if (!accessToken) {
-      redirect(303, deniedUrl);
+      return redirectNoStore(deniedUrl);
     }
 
     const response = await fetch(
@@ -26,16 +36,16 @@ export const GET: RequestHandler = async ({ cookies, fetch, params, url }) => {
       }
     );
     if (response.status === 401 || response.status === 403) {
-      redirect(303, deniedUrl);
+      return redirectNoStore(deniedUrl);
     }
     if (!response.ok) {
       console.error('Could not check project access', response.status);
-      redirect(303, failedUrl);
+      return redirectNoStore(failedUrl);
     }
 
     const payload = (await response.json()) as { allowed?: boolean; href?: string };
     if (!payload.allowed || typeof payload.href !== 'string') {
-      redirect(303, deniedUrl);
+      return redirectNoStore(deniedUrl);
     }
 
     const target = new URL(payload.href);
@@ -47,10 +57,9 @@ export const GET: RequestHandler = async ({ cookies, fetch, params, url }) => {
     ) {
       throw new Error('API returned an invalid project URL');
     }
-    redirect(303, target.href);
+    return redirectNoStore(target.href);
   } catch (cause) {
-    if (cause && typeof cause === 'object' && 'status' in cause) throw cause;
     console.error('Could not check project access', cause);
-    redirect(303, failedUrl);
+    return redirectNoStore(failedUrl);
   }
 };
