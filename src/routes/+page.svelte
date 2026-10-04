@@ -580,8 +580,8 @@
   const heartbeatSweepWidth = (): number =>
     Math.min(heartbeatMonitorWidth, heartbeatCycleWidth() * (heartbeatVisibleBeatCount() + 1));
   const heartbeatFirstBeat = (): number => heartbeatCycleWidth();
-  const heartbeatSweepDuration = (): string =>
-    ((heartbeatMonitorWidth + heartbeatSweepWidth() + 36) / 150).toFixed(2);
+  const heartbeatSweepStart = (): number => heartbeatFirstBeat() - heartbeatSweepWidth() - 18;
+  const heartbeatSweepDuration = (): string => (heartbeatMonitorWidth / 150).toFixed(2);
   const heartbeatAnimationDuration = (): string => (heartbeatCycleWidth() / 150).toFixed(2);
   const prefersReducedMotion = () => browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -1063,8 +1063,17 @@
                     <rect y="0" width={heartbeatSweepWidth()} height="120" fill="url(#heartbeat-sweep-gradient)">
                       <animate
                         attributeName="x"
-                        from={heartbeatFirstBeat() - heartbeatSweepWidth() - 18}
-                        to={heartbeatMonitorWidth + heartbeatFirstBeat() + 18}
+                        from={heartbeatSweepStart()}
+                        to={heartbeatSweepStart() + heartbeatMonitorWidth}
+                        dur={`${heartbeatSweepDuration()}s`}
+                        repeatCount="indefinite"
+                      />
+                    </rect>
+                    <rect y="0" width={heartbeatSweepWidth()} height="120" fill="url(#heartbeat-sweep-gradient)">
+                      <animate
+                        attributeName="x"
+                        from={heartbeatSweepStart() - heartbeatMonitorWidth}
+                        to={heartbeatSweepStart()}
                         dur={`${heartbeatSweepDuration()}s`}
                         repeatCount="indefinite"
                       />
