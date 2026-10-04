@@ -584,7 +584,7 @@
 
   const heartbeatSignalPath = (monitorWidth: number): string => {
     const cycleWidth = heartbeatCycleWidth();
-    const firstBeat = cycleWidth * 0.64375;
+    const firstBeat = 0;
     let path = `M0 60 H${firstBeat + cycleWidth * 0.2375}`;
     for (let index = 0; index < heartbeatBeatCount(); index += 1) {
       const x = firstBeat + index * cycleWidth;
@@ -597,7 +597,7 @@
   const heartbeatBaselineGapPath = (monitorWidth: number): string => {
     const segments: string[] = [];
     const cycleWidth = heartbeatCycleWidth();
-    const firstBeat = cycleWidth * 0.64375;
+    const firstBeat = 0;
     for (let index = 0; index < heartbeatBeatCount(); index += 1) {
       const x = firstBeat + index * cycleWidth;
       const at = (fraction: number) => x + cycleWidth * fraction;
