@@ -575,29 +575,43 @@
 
   const heartbeatBeatCount = (): number => Math.max(1, Math.floor(heartbeatMonitorWidth / 120));
   const heartbeatCycleWidth = (): number => heartbeatMonitorWidth / heartbeatBeatCount();
-  const heartbeatAnimationDuration = (): string => (heartbeatCycleWidth() / 150).toFixed(2);
+  const heartbeatWaveBeatCount = (): number => Math.max(1, Math.floor(heartbeatBeatCount() / 2));
+  const heartbeatWaveGapBeatCount = (): number =>
+    Math.max(1, Math.ceil(heartbeatWaveBeatCount() / 3));
+  const heartbeatWavePeriod = (): number =>
+    heartbeatCycleWidth() * (heartbeatWaveBeatCount() + heartbeatWaveGapBeatCount());
+  const heartbeatAnimationDuration = (): string =>
+    (heartbeatWavePeriod() / 150).toFixed(2);
   const prefersReducedMotion = () => browser && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const heartbeatSignalPath = (monitorWidth: number): string => {
     const cycleWidth = heartbeatCycleWidth();
-    const firstBeat = 0;
-    let path = `M0 60 H${firstBeat + cycleWidth * 0.2375}`;
-    for (let index = 0; index < Math.ceil(monitorWidth / cycleWidth); index += 1) {
-      const x = firstBeat + index * cycleWidth;
-      const at = (fraction: number) => x + cycleWidth * fraction;
-      path += `Q${at(0.25)} 60 ${at(0.275)} 54 H${at(0.3125)} L${at(0.35625)} 14 L${at(0.4)} 105 L${at(0.45)} 60 Q${at(0.4875)} 60 ${at(0.525)} 53 Q${at(0.5625)} 60 ${at(0.6125)} 60 H${Math.min(monitorWidth, at(1.2375))}`;
+    const wavePeriod = heartbeatWavePeriod();
+    let path = '';
+    for (let waveStart = -wavePeriod; waveStart < monitorWidth + wavePeriod; waveStart += wavePeriod) {
+      path += `M${waveStart} 60 H${waveStart + cycleWidth * 0.2375}`;
+      for (let index = 0; index < heartbeatWaveBeatCount(); index += 1) {
+        const x = waveStart + index * cycleWidth;
+        const at = (fraction: number) => x + cycleWidth * fraction;
+        path += `Q${at(0.25)} 60 ${at(0.275)} 54 H${at(0.3125)} L${at(0.35625)} 14 L${at(0.4)} 105 L${at(0.45)} 60 Q${at(0.4875)} 60 ${at(0.525)} 53 Q${at(0.5625)} 60 ${at(0.6125)} 60`;
+        if (index < heartbeatWaveBeatCount() - 1) {
+          path += ` H${waveStart + (index + 1) * cycleWidth + cycleWidth * 0.2375}`;
+        }
+      }
     }
-    return `${path} H${monitorWidth}`;
+    return path;
   };
 
   const heartbeatBaselineGapPath = (monitorWidth: number): string => {
     const segments: string[] = [];
     const cycleWidth = heartbeatCycleWidth();
-    const firstBeat = 0;
-    for (let index = 0; index < Math.ceil(monitorWidth / cycleWidth); index += 1) {
-      const x = firstBeat + index * cycleWidth;
-      const at = (fraction: number) => x + cycleWidth * fraction;
-      segments.push(`M${at(0.2125)} 60 H${at(0.6125)}`);
+    const wavePeriod = heartbeatWavePeriod();
+    for (let waveStart = -wavePeriod; waveStart < monitorWidth + wavePeriod; waveStart += wavePeriod) {
+      for (let index = 0; index < heartbeatWaveBeatCount(); index += 1) {
+        const x = waveStart + index * cycleWidth;
+        const at = (fraction: number) => x + cycleWidth * fraction;
+        segments.push(`M${at(0.2125)} 60 H${at(0.6125)}`);
+      }
     }
     return segments.join(' ');
   };
@@ -1047,7 +1061,7 @@
                     attributeName="transform"
                     type="translate"
                     from="0 0"
-                    to={`${-heartbeatCycleWidth()} 0`}
+                    to={`${-heartbeatWavePeriod()} 0`}
                     dur={`${heartbeatAnimationDuration()}s`}
                     repeatCount="indefinite"
                   />
