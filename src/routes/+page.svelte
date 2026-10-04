@@ -574,8 +574,11 @@
     metricDefinitions.filter((definition) => metricPoints(definition.name, definition.aggregate).length > 0);
 
   const heartbeatBeatCount = (): number => Math.max(1, Math.floor(heartbeatMonitorWidth / 120));
-  const heartbeatCycleWidth = (): number => heartbeatMonitorWidth / (heartbeatBeatCount() + 1);
-  const heartbeatSweepWidth = (): number => heartbeatCycleWidth();
+  const heartbeatCycleWidth = (): number => heartbeatMonitorWidth / heartbeatBeatCount();
+  const heartbeatVisibleBeatCount = (): number =>
+    Math.min(heartbeatBeatCount(), Math.max(1, Math.floor(heartbeatMonitorWidth / 240)));
+  const heartbeatSweepWidth = (): number =>
+    Math.min(heartbeatMonitorWidth, heartbeatCycleWidth() * (heartbeatVisibleBeatCount() + 1));
   const heartbeatFirstBeat = (): number => heartbeatCycleWidth();
   const heartbeatSweepDuration = (): string =>
     ((heartbeatMonitorWidth + heartbeatSweepWidth() + 36) / 150).toFixed(2);
@@ -1049,10 +1052,10 @@
                 <defs>
                   <linearGradient id="heartbeat-sweep-gradient">
                     <stop offset="0%" stop-color="white" stop-opacity="0" />
-                    <stop offset="18%" stop-color="white" stop-opacity="0" />
-                    <stop offset="24%" stop-color="white" />
-                    <stop offset="64%" stop-color="white" />
-                    <stop offset="70%" stop-color="white" stop-opacity="0" />
+                    <stop offset="4%" stop-color="white" stop-opacity="0" />
+                    <stop offset="8%" stop-color="white" />
+                    <stop offset="92%" stop-color="white" />
+                    <stop offset="96%" stop-color="white" stop-opacity="0" />
                     <stop offset="100%" stop-color="white" stop-opacity="0" />
                   </linearGradient>
                   <mask id="heartbeat-sweep-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={heartbeatMonitorWidth} height="120">
