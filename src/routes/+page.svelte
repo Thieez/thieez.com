@@ -1076,9 +1076,9 @@
                   class:heartbeat-trace-paused={heartbeatConnection === 'connecting'}
                   d={`M0 60 H${heartbeatMonitorWidth}`}
                   pathLength="1000"
-                  stroke-dasharray={heartbeatConnection === 'disconnected' && !prefersReducedMotion() ? '90 910' : undefined}
+                  stroke-dasharray={!prefersReducedMotion() ? '90 910' : undefined}
                 >
-                  {#if heartbeatConnection === 'disconnected' && !prefersReducedMotion()}
+                  {#if !prefersReducedMotion()}
                     <animate
                       attributeName="stroke-dashoffset"
                       from="0"
