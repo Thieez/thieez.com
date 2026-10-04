@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { addAdminAccessEntry, getAdminAccess, getLisnntoLimits, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, restoreAuth, revokeAdminAppAccess, startLogin, updateWhitelistSetting, type AdminAccessData, type AuthSession } from '$lib/auth-client';
+  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getLisnntoLimits, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, startLogin, updateWhitelistSetting, type AdminAccessData, type AuthSession, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -40,11 +40,17 @@
   let authLoading = true;
   let profileMenuOpen = false;
   let accountOpen = false;
-  let adminOpen = data.isDashboard;
+  let adminOpen = false;
   let adminAccess: AdminAccessData | null = null;
-  let adminLoading = data.isDashboard;
+  let adminLoading = false;
   let adminError = '';
   let adminMessage = '';
+  let userApiKeys: UserApiKey[] = [];
+  let apiKeysLoading = false;
+  let apiKeysError = '';
+  let apiKeysMessage = '';
+  let apiKeyName = '';
+  let createdApiKey = '';
   let adminEmail = '';
   let adminReason = '';
   let adminAction: 'whitelist' | 'blacklist' | 'admin' = 'whitelist';
@@ -196,9 +202,10 @@
         .then((session) => {
           authSession = session;
           if (data.isDashboard) {
-            if (session?.user?.is_admin === true) {
+            if (session) {
               adminOpen = true;
-              void refreshAdminAccess();
+              void refreshUserApiKeys();
+              if (session.user?.is_admin === true) void refreshAdminAccess();
             } else {
               void goto('/');
             }
@@ -211,16 +218,19 @@
                   if (!updatedSession && authRefreshTimer !== undefined) {
                     window.clearInterval(authRefreshTimer);
                     authRefreshTimer = undefined;
+                    if (data.isDashboard) void goto('/');
                   }
                 })
                 .catch(() => {
                   authSession = null;
+                  if (data.isDashboard) void goto('/');
                 });
             }, 15 * 60 * 1000);
           }
         })
         .catch(() => {
           authSession = null;
+          if (data.isDashboard) void goto('/');
         })
         .finally(() => {
           authLoading = false;
@@ -269,7 +279,6 @@
       const session = await restoreAuth();
       authSession = session;
       if (session?.user?.is_admin !== true) {
-        adminOpen = false;
         adminAccess = null;
       }
       profileMenuOpen = Boolean(session);
@@ -312,10 +321,54 @@
     }
   };
 
+  const refreshUserApiKeys = async () => {
+    apiKeysLoading = true;
+    apiKeysError = '';
+    try {
+      userApiKeys = await getUserApiKeys();
+    } catch (cause) {
+      apiKeysError = cause instanceof Error ? cause.message : 'Could not load API keys.';
+    } finally {
+      apiKeysLoading = false;
+    }
+  };
+
+  const createApiKey = async (event: SubmitEvent) => {
+    event.preventDefault();
+    apiKeysError = '';
+    apiKeysMessage = '';
+    createdApiKey = '';
+    try {
+      const result = await createUserApiKey(apiKeyName);
+      createdApiKey = result.api_key;
+      apiKeyName = '';
+      apiKeysMessage = 'Copy this key now. It will not be shown again.';
+      await refreshUserApiKeys();
+    } catch (cause) {
+      apiKeysError = cause instanceof Error ? cause.message : 'Could not create API key.';
+    }
+  };
+
+  const revokeApiKey = async (key: UserApiKey) => {
+    if (!window.confirm(`Revoke “${key.name}”? Applications using this key will lose access immediately.`)) return;
+    apiKeysError = '';
+    apiKeysMessage = '';
+    try {
+      await revokeUserApiKey(key.id);
+      apiKeysMessage = `“${key.name}” was revoked.`;
+      if (userApiKeys.some((item) => item.id === key.id && createdApiKey.startsWith(item.key_prefix))) {
+        createdApiKey = '';
+      }
+      await refreshUserApiKeys();
+    } catch (cause) {
+      apiKeysError = cause instanceof Error ? cause.message : 'Could not revoke API key.';
+    }
+  };
+
   const openAdmin = () => {
     profileMenuOpen = false;
     accountOpen = false;
-    if (authSession?.user?.is_admin !== true) return;
+    if (!authSession) return;
     void goto('/dashboard');
   };
 
@@ -572,11 +625,9 @@
                 <button class="profile-dropdown-item" onclick={openAccount}>
                   <span>Account</span><span aria-hidden="true">↗</span>
                 </button>
-                {#if authSession.user?.is_admin === true}
-                  <button class="profile-dropdown-item" onclick={openAdmin}>
-                    <span>Dashboard</span><span aria-hidden="true">↗</span>
-                  </button>
-                {/if}
+                <button class="profile-dropdown-item" onclick={openAdmin}>
+                  <span>Dashboard</span><span aria-hidden="true">↗</span>
+                </button>
                 <button class="profile-dropdown-item profile-dropdown-logout" onclick={handleLogout}>
                   <span>Log out</span><span aria-hidden="true">↗</span>
                 </button>
@@ -616,8 +667,54 @@
           <p class="eyebrow">THIEEZ / DASHBOARD</p>
           <button class="text-button" onclick={closeAdmin}>Close <span aria-hidden="true">×</span></button>
         </div>
-        <h1 id="admin-heading">Access <em>control.</em></h1>
-        <p class="lede">Manage API access and administrator permissions. Changes take effect immediately.</p>
+        <h1 id="admin-heading">Your <em>dashboard.</em></h1>
+        <p class="lede">Create and revoke API keys for your account. Keys inherit your account’s API access.</p>
+        {#if apiKeysError}
+          <div class="state-panel error-panel admin-feedback" role="alert">
+            <strong>Couldn’t manage API keys.</strong><span>{apiKeysError}</span>
+            <button class="text-button" onclick={refreshUserApiKeys}>Try again</button>
+          </div>
+        {:else if apiKeysMessage}
+          <div class="state-panel admin-feedback" role="status">{apiKeysMessage}</div>
+        {/if}
+        {#if createdApiKey}
+          <div class="api-key-created" role="status">
+            <strong>New API key — copy it now</strong>
+            <input aria-label="New API key" readonly value={createdApiKey} onclick={(event) => event.currentTarget.select()} />
+            <small>This secret is only shown once. Store it securely and send it as a Bearer token.</small>
+          </div>
+        {/if}
+        <form class="admin-entry-form api-key-form" onsubmit={createApiKey}>
+          <label>
+            <span>Key name</span>
+            <input type="text" bind:value={apiKeyName} required maxlength="60" autocomplete="off" placeholder="My integration" />
+          </label>
+          <button class="admin-submit" type="submit" disabled={apiKeysLoading || !apiKeyName.trim()}>
+            {apiKeysLoading ? 'Working…' : 'Create API key'} <span aria-hidden="true">↗</span>
+          </button>
+        </form>
+        <section class="user-api-keys">
+          <div class="section-heading">
+            <h2>Your API keys</h2>
+            <button class="text-button" onclick={refreshUserApiKeys}>Refresh</button>
+          </div>
+          {#if apiKeysLoading && !userApiKeys.length}
+            <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading API keys…</span></div>
+          {:else if userApiKeys.length}
+            {#each userApiKeys as key (key.id)}
+              <div class="admin-list-row">
+                <span>
+                  <strong>{key.name}</strong>
+                  <small>{key.key_prefix}… · Created {new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(key.created_at))}{key.last_used_at ? ` · Last used ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(key.last_used_at))}` : ' · Never used'}</small>
+                </span>
+                <button class="text-button admin-block-button" onclick={() => void revokeApiKey(key)}>Revoke</button>
+              </div>
+            {/each}
+          {:else}
+            <p class="admin-empty">You haven’t created any API keys yet.</p>
+          {/if}
+        </section>
+        {#if authSession?.user?.is_admin === true}
         {#if adminError}
           <div class="state-panel error-panel admin-feedback" role="alert">
             <strong>Couldn’t update access settings.</strong><span>{adminError}</span>
@@ -756,6 +853,7 @@
               {:else}<p class="admin-empty">No database-assigned administrators.</p>{/if}
             </section>
           </div>
+        {/if}
         {/if}
       </section>
     {:else if accountOpen}

@@ -34,6 +34,14 @@ export type AdminAccessData = {
   }>;
 };
 
+export type UserApiKey = {
+  id: string;
+  name: string;
+  key_prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+};
+
 async function request(path: string, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -102,6 +110,38 @@ async function requestAdmin<T>(
 
 export function getAdminAccess(): Promise<AdminAccessData> {
   return requestAdmin<AdminAccessData>('GET');
+}
+
+async function requestApiKeys<T>(
+  method: string,
+  body?: Record<string, unknown>,
+  keyId?: string
+): Promise<T> {
+  const query = keyId ? `?key_id=${encodeURIComponent(keyId)}` : '';
+  const response = await request(`/auth/api-keys${query}`, {
+    method,
+    headers: {
+      Accept: 'application/json',
+      ...(body ? { 'Content-Type': 'application/json' } : {})
+    },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  });
+  const payload = (await response.json()) as T & { detail?: string };
+  if (!response.ok) throw new Error(payload.detail || `API key request failed (${response.status})`);
+  return payload;
+}
+
+export async function getUserApiKeys(): Promise<UserApiKey[]> {
+  const result = await requestApiKeys<{ api_keys: UserApiKey[] }>('GET');
+  return result.api_keys;
+}
+
+export function createUserApiKey(name: string): Promise<{ api_key: string; key: UserApiKey }> {
+  return requestApiKeys<{ api_key: string; key: UserApiKey }>('POST', { name });
+}
+
+export async function revokeUserApiKey(keyId: string): Promise<void> {
+  await requestApiKeys<Record<string, unknown>>('DELETE', undefined, keyId);
 }
 
 export async function updateWhitelistSetting(whitelist_enabled: boolean): Promise<void> {
