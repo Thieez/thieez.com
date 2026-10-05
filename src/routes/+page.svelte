@@ -4,9 +4,15 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getLisnntoLimits, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, startLogin, updateWhitelistSetting, type AdminAccessData, type AuthSession, type UserApiKey } from '$lib/auth-client';
+  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getLisnntoLimits, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, signOutAdminDevice, startLogin, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AuthSession, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
+
+  type AdminDevicePanelState = {
+    loading: boolean;
+    error: string;
+    devices: AdminDevice[] | null;
+  };
 
   let isLisnnto = data.isLisnnto;
   let isNote = data.isNote;
@@ -64,6 +70,11 @@
   let adminUserSearch = '';
   let adminUserPage = 1;
   let expandedAdminUsers = new Set<string>();
+  let expandedDeviceUsers = new Set<string>();
+  let adminDevicePanels: Record<string, AdminDevicePanelState> = {};
+  let pendingDeviceActions = new Set<string>();
+  let deviceActionErrors: Record<string, string> = {};
+  let deviceActionMessages: Record<string, string> = {};
   let pendingAppGrants = new Set<string>();
   let appGrantErrors: Record<string, string> = {};
   let appGrantMessages: Record<string, string> = {};
@@ -518,6 +529,91 @@
     if (expanded.has(userId)) expanded.delete(userId);
     else expanded.add(userId);
     expandedAdminUsers = expanded;
+  };
+
+  const formatAdminDeviceDate = (value: string | null) => {
+    if (!value) return 'Not recorded';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown';
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    }).format(date);
+  };
+
+  const loadAdminUserDevices = async (userId: string, force = false) => {
+    const current = adminDevicePanels[userId];
+    if (!force && (current?.loading || (current && current.devices !== null && !current.error))) return;
+    adminDevicePanels = {
+      ...adminDevicePanels,
+      [userId]: { loading: true, error: '', devices: current?.devices ?? null }
+    };
+    try {
+      const devices = await getAdminUserDevices(userId);
+      adminDevicePanels = {
+        ...adminDevicePanels,
+        [userId]: { loading: false, error: '', devices }
+      };
+    } catch (cause) {
+      adminDevicePanels = {
+        ...adminDevicePanels,
+        [userId]: {
+          loading: false,
+          error: cause instanceof Error ? cause.message : 'Could not load device details.',
+          devices: current?.devices ?? null
+        }
+      };
+    }
+  };
+
+  const toggleAdminUserDevices = (userId: string) => {
+    const expanded = new Set(expandedDeviceUsers);
+    if (expanded.has(userId)) expanded.delete(userId);
+    else {
+      expanded.add(userId);
+      void loadAdminUserDevices(userId);
+    }
+    expandedDeviceUsers = expanded;
+  };
+
+  const updateAdminDevice = async (
+    userId: string,
+    device: AdminDevice,
+    action: 'sign_out' | 'remove_trust'
+  ) => {
+    const key = `${userId}:${device.device_id}`;
+    if (pendingDeviceActions.has(key)) return;
+    pendingDeviceActions = new Set([...pendingDeviceActions, key]);
+    deviceActionErrors = { ...deviceActionErrors, [key]: '' };
+    deviceActionMessages = { ...deviceActionMessages, [key]: '' };
+    try {
+      if (action === 'sign_out') {
+        await signOutAdminDevice(userId, device.device_id);
+        deviceActionMessages = {
+          ...deviceActionMessages,
+          [key]: 'Refresh session revoked. Existing access tokens remain valid until expiry.'
+        };
+      } else {
+        await removeAdminDeviceTrust(userId, device.device_id);
+        deviceActionMessages = {
+          ...deviceActionMessages,
+          [key]: 'Trust removed. This does not sign out the device.'
+        };
+      }
+      await Promise.all([
+        loadAdminUserDevices(userId, true),
+        refreshAdminAccess()
+      ]);
+    } catch (cause) {
+      deviceActionErrors = {
+        ...deviceActionErrors,
+        [key]: cause instanceof Error ? cause.message : 'Could not update this device.'
+      };
+    } finally {
+      const pending = new Set(pendingDeviceActions);
+      pending.delete(key);
+      pendingDeviceActions = pending;
+    }
   };
 
   const toggleAdminAppGrant = async (
@@ -986,13 +1082,19 @@
                           <span class:roster-online={rosterUser.is_online} class="roster-presence">
                             <i aria-hidden="true"></i>{rosterUser.is_online ? 'Online' : 'Offline'}
                           </span>
-                          <span>
-                            {rosterUser.device_count}
-                            {rosterUser.device_count === 1 ? 'trusted device' : 'trusted devices'}
-                          </span>
                           {#if rosterUser.is_admin}<span class="roster-admin-label">Administrator</span>{/if}
                         </small>
                       </div>
+                      <button
+                        class="text-button roster-device-toggle"
+                        aria-expanded={expandedDeviceUsers.has(rosterUser.user_id)}
+                        aria-controls={`devices-${rosterUser.user_id}`}
+                        onclick={() => toggleAdminUserDevices(rosterUser.user_id)}
+                      >
+                        {rosterUser.device_count}
+                        {rosterUser.device_count === 1 ? 'trusted device' : 'trusted devices'}
+                        <span aria-hidden="true">{expandedDeviceUsers.has(rosterUser.user_id) ? '−' : '+'}</span>
+                      </button>
                       <div class="admin-roster-actions">
                         <button
                           class="text-button roster-project-toggle"
@@ -1043,6 +1145,75 @@
                           <p class="admin-empty">No published projects are available.</p>
                         {/if}
                       </div>
+                    {/if}
+                    {#if expandedDeviceUsers.has(rosterUser.user_id)}
+                      {@const devicePanel = adminDevicePanels[rosterUser.user_id]}
+                      <section
+                        class="admin-device-panel"
+                        id={`devices-${rosterUser.user_id}`}
+                        aria-label={`Trusted devices and sessions for ${rosterUser.email || rosterUser.name || rosterUser.user_id}`}
+                      >
+                        <div class="admin-device-panel-heading">
+                          <strong>Devices and sessions</strong>
+                          <button
+                            class="text-button"
+                            disabled={devicePanel?.loading}
+                            onclick={() => void loadAdminUserDevices(rosterUser.user_id, true)}
+                          >Refresh</button>
+                        </div>
+                        {#if devicePanel?.loading && devicePanel.devices === null}
+                          <p class="admin-empty device-loading" role="status">Loading device details…</p>
+                        {:else if devicePanel?.error}
+                          <div class="device-fetch-error" role="alert">
+                            <span>{devicePanel.error}</span>
+                            <button class="text-button" onclick={() => void loadAdminUserDevices(rosterUser.user_id, true)}>Try again</button>
+                          </div>
+                        {:else if devicePanel?.devices?.length}
+                          {#if devicePanel.loading}<p class="device-refreshing" role="status">Refreshing devices…</p>{/if}
+                          {#each devicePanel.devices as device (device.device_id)}
+                            {@const actionKey = `${rosterUser.user_id}:${device.device_id}`}
+                            <article class="admin-device-row">
+                              <div class="admin-device-info">
+                                <strong>{device.device_name || device.device_id}</strong>
+                                <small>ID · {device.device_id}</small>
+                                <small>Trusted · {formatAdminDeviceDate(device.trusted_at)}</small>
+                                <small>Last used · {formatAdminDeviceDate(device.last_used_at)}</small>
+                              </div>
+                              <div class="admin-device-status">
+                                <span class:device-status-trusted={device.is_trusted} class="device-status">
+                                  {device.is_trusted ? 'Trusted' : 'Not trusted'}
+                                </span>
+                                <span class:device-status-active={device.has_active_session} class="device-status">
+                                  {device.has_active_session ? 'Active refresh session' : 'No active refresh session'}
+                                </span>
+                              </div>
+                              <div class="admin-device-actions">
+                                {#if device.has_active_session}
+                                  <button
+                                    class="text-button"
+                                    disabled={pendingDeviceActions.has(actionKey)}
+                                    onclick={() => void updateAdminDevice(rosterUser.user_id, device, 'sign_out')}
+                                  >{pendingDeviceActions.has(actionKey) ? 'Signing out…' : 'Sign out'}</button>
+                                {/if}
+                                {#if device.is_trusted}
+                                  <button
+                                    class="text-button"
+                                    disabled={pendingDeviceActions.has(actionKey)}
+                                    onclick={() => void updateAdminDevice(rosterUser.user_id, device, 'remove_trust')}
+                                  >{pendingDeviceActions.has(actionKey) ? 'Updating…' : 'Remove trust'}</button>
+                                {/if}
+                              </div>
+                              {#if deviceActionErrors[actionKey]}
+                                <p class="device-action-error" role="alert">{deviceActionErrors[actionKey]}</p>
+                              {:else if deviceActionMessages[actionKey]}
+                                <p class="device-action-feedback" role="status">{deviceActionMessages[actionKey]}</p>
+                              {/if}
+                            </article>
+                          {/each}
+                        {:else if devicePanel?.devices}
+                          <p class="admin-empty">No trusted devices or login sessions found.</p>
+                        {/if}
+                      </section>
                     {/if}
                   </article>
                 {/each}

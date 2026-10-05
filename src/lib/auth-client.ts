@@ -34,6 +34,15 @@ export type AdminAccessData = {
   admins: Array<{ user_id: string; email: string | null; name: string | null }>;
 };
 
+export type AdminDevice = {
+  device_id: string;
+  device_name: string | null;
+  trusted_at: string | null;
+  last_used_at: string | null;
+  is_trusted: boolean;
+  has_active_session: boolean;
+};
+
 export type UserApiKey = {
   id: string;
   name: string;
@@ -96,9 +105,13 @@ export async function getLisnntoLimits(): Promise<import('$lib/api').LisnntoLimi
 async function requestAdmin<T>(
   method: string,
   body?: Record<string, unknown>,
-  query?: URLSearchParams
+  query?: URLSearchParams,
+  resource: 'access' | 'devices' = 'access'
 ): Promise<T> {
-  const response = await request(`/admin/access${query ? `?${query}` : ''}`, {
+  const params = new URLSearchParams(query);
+  if (resource === 'devices') params.set('resource', resource);
+  const queryString = params.toString();
+  const response = await request(`/admin/access${queryString ? `?${queryString}` : ''}`, {
     method,
     headers: {
       Accept: 'application/json',
@@ -117,6 +130,41 @@ export function getAdminAccess(search = '', page = 1): Promise<AdminAccessData> 
   const query = new URLSearchParams({ page: String(page), page_size: '50' });
   if (search.trim()) query.set('search', search.trim());
   return requestAdmin<AdminAccessData>('GET', undefined, query);
+}
+
+export async function getAdminUserDevices(userId: string): Promise<AdminDevice[]> {
+  const result = await requestAdmin<{ user_id: string; devices: AdminDevice[] }>(
+    'GET',
+    undefined,
+    new URLSearchParams({ user_id: userId }),
+    'devices'
+  );
+  return result.devices;
+}
+
+export function signOutAdminDevice(userId: string, deviceId: string): Promise<{
+  user_id: string;
+  device_id: string;
+  revoked_sessions: number;
+}> {
+  return requestAdmin(
+    'POST',
+    { action: 'sign_out', user_id: userId, device_id: deviceId },
+    undefined,
+    'devices'
+  );
+}
+
+export function removeAdminDeviceTrust(
+  userId: string,
+  deviceId: string
+): Promise<{ user_id: string; device_id: string; removed: boolean }> {
+  return requestAdmin(
+    'DELETE',
+    undefined,
+    new URLSearchParams({ user_id: userId, device_id: deviceId }),
+    'devices'
+  );
 }
 
 async function requestApiKeys<T>(

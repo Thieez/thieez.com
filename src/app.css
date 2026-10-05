@@ -111,7 +111,7 @@ h1 em{font-style:normal;color:#8d8a82}
 .roster-heading>span:nth-child(2){margin-left:16px}
 .admin-roster-user{border-bottom:1px solid var(--line)}
 .admin-roster-row{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:17px 0}
-.admin-roster-identity{display:flex;min-width:0;flex-direction:column;gap:5px;overflow-wrap:anywhere}
+.admin-roster-identity{display:flex;min-width:0;flex:1;flex-direction:column;gap:5px;overflow-wrap:anywhere}
 .admin-roster-identity>strong{font-size:14px;letter-spacing:-.02em}
 .admin-roster-identity small{display:flex;align-items:center;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:11px}
 .roster-presence{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font:10px "SFMono-Regular",Consolas,"Liberation Mono",monospace;text-transform:uppercase;letter-spacing:.04em}
@@ -120,8 +120,29 @@ h1 em{font-style:normal;color:#8d8a82}
 .roster-presence.roster-online i{background:#7f9a00;box-shadow:0 0 0 3px rgba(127,154,0,.14)}
 .roster-admin-label{font:10px "SFMono-Regular",Consolas,"Liberation Mono",monospace;text-transform:uppercase;letter-spacing:.04em}
 .admin-roster-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px 14px}
+.roster-device-toggle{display:inline-flex;align-items:center;gap:7px;margin-left:auto;white-space:nowrap}
+.roster-device-toggle span{color:var(--muted);font:14px "SFMono-Regular",Consolas,"Liberation Mono",monospace;text-decoration:none}
 .roster-project-toggle{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
 .roster-project-toggle span{color:var(--muted);font:10px "SFMono-Regular",Consolas,"Liberation Mono",monospace}
+.admin-device-panel{margin:0 0 18px;padding:9px 15px 4px;border-left:3px solid var(--lime);background:rgba(255,255,255,.42)}
+.admin-device-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:3px 0 8px}
+.admin-device-panel-heading>strong{font-size:11px;letter-spacing:.01em}
+.admin-device-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(145px,auto) auto;align-items:center;gap:12px 18px;padding:13px 0;border-top:1px solid var(--line)}
+.admin-device-info{display:flex;min-width:0;flex-direction:column;gap:4px;overflow-wrap:anywhere}
+.admin-device-info>strong{font-size:12px}
+.admin-device-info>small{color:var(--muted);font:10px "SFMono-Regular",Consolas,"Liberation Mono",monospace}
+.admin-device-status{display:flex;flex-wrap:wrap;gap:6px}
+.device-status{padding:4px 6px;border:1px solid var(--line);color:#5f5b53;font:9px "SFMono-Regular",Consolas,"Liberation Mono",monospace;text-transform:uppercase;letter-spacing:.035em}
+.device-status-trusted,.device-status-active{border-color:#a6bb39;background:rgba(215,243,74,.24);color:#3e4b00}
+.admin-device-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px 12px}
+.admin-device-actions button:disabled,.admin-device-panel-heading button:disabled{color:var(--muted);cursor:wait}
+.device-action-error,.device-action-feedback{grid-column:1/-1;margin:0;font-size:10px;line-height:1.5}
+.device-action-error,.device-fetch-error{color:#9c3329}
+.device-fetch-error{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0;font-size:11px}
+.device-fetch-error button{flex:none}
+.device-loading{padding:9px 0}
+.device-refreshing{margin:0;padding:4px 0;color:var(--muted);font:10px "SFMono-Regular",Consolas,"Liberation Mono",monospace}
+.device-action-feedback{color:#465500}
 .admin-project-checklist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px;margin:0 0 18px;padding:8px 15px;border-left:3px solid var(--lime);background:rgba(255,255,255,.42)}
 .admin-project-option{display:flex;min-width:0;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
 .admin-project-option input{width:16px;height:16px;flex:none;accent-color:#7f9a00}
@@ -199,6 +220,7 @@ h1 em{font-style:normal;color:#8d8a82}
 @media(max-width:800px){.infrastructure-grid{grid-template-columns:1fr;gap:32px}}
 @media(max-width:900px){.admin-entry-form{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-submit{width:max-content}}
 @media(max-width:650px){.masthead{height:70px;padding:0 22px}.header-meta{font-size:8px;gap:5px}.auth-button{font-size:9px;padding:5px 7px}.profile-dropdown{right:-8px}.main-content{width:calc(100% - 44px)}.hero{padding:76px 0 62px}h1{font-size:clamp(51px,16vw,78px)}.lede{font-size:15px;margin-top:28px}.project-row{grid-template-columns:34px 1fr 24px;gap:10px;padding:20px 0}.project-meta{display:none}.project-copy strong{font-size:21px}.project-copy span{font-size:13px}.project-arrow{font-size:20px}.release-details{align-items:stretch;flex-direction:column}.download-button{justify-content:space-between}.version{font-size:32px}.limits-grid{grid-template-columns:1fr;margin-top:42px}.storage-values{grid-template-columns:1fr 1fr;gap:14px}.storage-values strong{font-size:26px}.render-details{grid-template-columns:1fr 1fr}.render-metric-grid{grid-template-columns:1fr}.render-metric{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:14px}.render-metric-heading strong{font-size:22px}.metric-chart{height:108px}.heartbeat-summary{gap:12px}.heartbeat-summary strong{font-size:16px}.heartbeat-monitor{height:130px;background-size:24px 24px}.footer{width:calc(100% - 44px);flex-direction:column;gap:8px}.aside-note{padding-bottom:80px}}
-@media(max-width:520px){.admin-toggle{align-items:flex-start}.admin-entry-form,.admin-lists{grid-template-columns:1fr}.admin-lists>section:last-child{grid-column:auto}.admin-entry-form{margin-bottom:44px}.admin-roster-row{align-items:flex-start;flex-direction:column}.admin-roster-actions{justify-content:flex-start}.admin-project-checklist{grid-template-columns:1fr}.roster-heading{align-items:flex-start;flex-wrap:wrap}.roster-heading>span:nth-child(2){margin-left:auto}}
+@media(max-width:700px){.admin-device-row{grid-template-columns:minmax(0,1fr) auto}.admin-device-status{grid-column:1/-1;grid-row:2}.admin-device-actions{grid-column:2;grid-row:1}}
+@media(max-width:520px){.admin-toggle{align-items:flex-start}.admin-entry-form,.admin-lists{grid-template-columns:1fr}.admin-lists>section:last-child{grid-column:auto}.admin-entry-form{margin-bottom:44px}.admin-roster-row{align-items:flex-start;flex-direction:column}.admin-roster-actions{justify-content:flex-start}.roster-device-toggle{align-self:flex-end}.admin-device-row{grid-template-columns:1fr}.admin-device-status,.admin-device-actions{grid-column:1;grid-row:auto}.admin-device-actions{justify-content:flex-start}.admin-project-checklist{grid-template-columns:1fr}.roster-heading{align-items:flex-start;flex-wrap:wrap}.roster-heading>span:nth-child(2){margin-left:auto}}
 @media(max-width:420px){.render-metric{grid-template-columns:1fr}.render-metric-heading{flex-direction:row;align-items:baseline}.metric-chart{height:110px}.render-metric-history{width:100%}}
 @media(prefers-reduced-motion:reduce){.heartbeat-monitor animate,.heartbeat-monitor animateTransform{display:none}}

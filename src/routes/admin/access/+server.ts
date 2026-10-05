@@ -17,7 +17,12 @@ async function proxyAccessRequest({
       });
     }
 
-    const response = await fetch(`${AUTH_BASE}/admin/access${url.search}`, {
+    const resource = url.searchParams.get('resource');
+    const apiPath = resource === 'devices' ? '/admin/access/devices' : '/admin/access';
+    const apiQuery = new URLSearchParams(url.searchParams);
+    apiQuery.delete('resource');
+    const queryString = apiQuery.toString();
+    const response = await fetch(`${AUTH_BASE}${apiPath}${queryString ? `?${queryString}` : ''}`, {
       method: request.method,
       headers: {
         Accept: 'application/json',
