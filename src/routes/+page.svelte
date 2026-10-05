@@ -44,13 +44,17 @@
   let adminOpen = false;
   let adminAccess: AdminAccessData | null = null;
   let adminLoading = false;
+  let adminEntrySaving = false;
+  let whitelistSaving = false;
   let adminError = '';
   let adminMessage = '';
   let userApiKeys: UserApiKey[] = [];
   let apiKeysLoading = false;
+  let apiKeyCreating = false;
   let apiKeysError = '';
   let apiKeysMessage = '';
   let apiKeyName = '';
+  let pendingApiKeySequence = 0;
   let createdApiKey = '';
   let adminEmail = '';
   let adminReason = '';
@@ -313,7 +317,9 @@
     apiKeysLoading = true;
     apiKeysError = '';
     try {
-      userApiKeys = await getUserApiKeys();
+      const keys = await getUserApiKeys();
+      const pendingKeys = userApiKeys.filter((key) => key.id.startsWith('pending:'));
+      userApiKeys = [...keys, ...pendingKeys];
     } catch (cause) {
       apiKeysError = cause instanceof Error ? cause.message : 'Could not load API keys.';
     } finally {
@@ -323,32 +329,54 @@
 
   const createApiKey = async (event: SubmitEvent) => {
     event.preventDefault();
+    const name = apiKeyName.trim();
+    if (!name || apiKeyCreating) return;
     apiKeysError = '';
     apiKeysMessage = '';
     createdApiKey = '';
+    apiKeyCreating = true;
+    const pendingId = `pending:${++pendingApiKeySequence}`;
+    userApiKeys = [{
+      id: pendingId,
+      name,
+      key_prefix: 'Creating',
+      created_at: new Date().toISOString(),
+      last_used_at: null
+    }, ...userApiKeys];
+    apiKeyName = '';
+    apiKeysMessage = 'Creating API key…';
     try {
-      const result = await createUserApiKey(apiKeyName);
+      const result = await createUserApiKey(name);
+      userApiKeys = userApiKeys.map((key) => key.id === pendingId ? result.key : key);
       createdApiKey = result.api_key;
-      apiKeyName = '';
       apiKeysMessage = 'Copy this key now. It will not be shown again.';
-      await refreshUserApiKeys();
     } catch (cause) {
+      userApiKeys = userApiKeys.filter((key) => key.id !== pendingId);
+      if (!apiKeyName) apiKeyName = name;
       apiKeysError = cause instanceof Error ? cause.message : 'Could not create API key.';
+    } finally {
+      apiKeyCreating = false;
     }
   };
 
   const revokeApiKey = async (key: UserApiKey) => {
     if (!window.confirm(`Revoke “${key.name}”? Applications using this key will lose access immediately.`)) return;
     apiKeysError = '';
-    apiKeysMessage = '';
+    apiKeysMessage = `Revoking “${key.name}”…`;
+    const originalIndex = userApiKeys.findIndex((item) => item.id === key.id);
+    const previousCreatedApiKey = createdApiKey;
+    userApiKeys = userApiKeys.filter((item) => item.id !== key.id);
+    if (createdApiKey.startsWith(key.key_prefix)) createdApiKey = '';
     try {
       await revokeUserApiKey(key.id);
       apiKeysMessage = `“${key.name}” was revoked.`;
-      if (userApiKeys.some((item) => item.id === key.id && createdApiKey.startsWith(item.key_prefix))) {
-        createdApiKey = '';
-      }
-      await refreshUserApiKeys();
     } catch (cause) {
+      if (!userApiKeys.some((item) => item.id === key.id)) {
+        const restoredKeys = [...userApiKeys];
+        restoredKeys.splice(Math.min(originalIndex, restoredKeys.length), 0, key);
+        userApiKeys = restoredKeys;
+      }
+      if (!createdApiKey) createdApiKey = previousCreatedApiKey;
       apiKeysError = cause instanceof Error ? cause.message : 'Could not revoke API key.';
     }
   };
@@ -366,31 +394,72 @@
   };
 
   const saveWhitelistSetting = async (enabled: boolean) => {
+    if (whitelistSaving || !adminAccess) return;
+    whitelistSaving = true;
     adminError = '';
     adminMessage = '';
+    const previousValue = adminAccess.whitelist_enabled;
+    adminAccess = { ...adminAccess, whitelist_enabled: enabled };
+    adminMessage = 'Saving whitelist setting…';
     try {
       await updateWhitelistSetting(enabled);
-      if (adminAccess) adminAccess = { ...adminAccess, whitelist_enabled: enabled };
       adminMessage = 'Whitelist setting saved.';
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Could not update whitelist setting.';
-      await refreshAdminAccess();
-      adminError = message;
+      if (adminAccess) adminAccess = { ...adminAccess, whitelist_enabled: previousValue };
+      adminError = cause instanceof Error ? cause.message : 'Could not update whitelist setting.';
+    } finally {
+      whitelistSaving = false;
     }
   };
 
   const addAccessEntry = async (event: SubmitEvent) => {
     event.preventDefault();
+    if (adminEntrySaving) return;
+    const email = adminEmail.trim();
+    const reason = adminReason.trim();
+    if (!email || !adminAccess) return;
     adminError = '';
     adminMessage = '';
+    const previousAccess = adminAccess;
+    if (adminAction === 'whitelist' || adminAction === 'blacklist') {
+      const target = adminAction;
+      const opposite = target === 'whitelist' ? 'blacklist' : 'whitelist';
+      const entry = { email, reason: reason || null, updated_at: new Date().toISOString() };
+      adminAccess = {
+        ...adminAccess,
+        [opposite]: adminAccess[opposite].filter((item) => item.email.toLowerCase() !== email.toLowerCase()),
+        [target]: [entry, ...adminAccess[target].filter((item) => item.email.toLowerCase() !== email.toLowerCase())]
+      };
+    } else {
+      const matchingUser = adminAccess.users.find((user) => user.email?.toLowerCase() === email.toLowerCase());
+      const pendingAdmin = {
+        user_id: matchingUser?.user_id ?? `pending:${email.toLowerCase()}`,
+        email,
+        name: matchingUser?.name ?? null
+      };
+      adminAccess = {
+        ...adminAccess,
+        admins: [pendingAdmin, ...adminAccess.admins.filter((admin) => admin.email?.toLowerCase() !== email.toLowerCase())],
+        users: matchingUser
+          ? adminAccess.users.map((user) => user.user_id === matchingUser.user_id ? { ...user, is_admin: true } : user)
+          : adminAccess.users
+      };
+    }
+    adminEmail = '';
+    adminReason = '';
+    adminMessage = 'Saving access…';
+    adminEntrySaving = true;
     try {
-      await addAdminAccessEntry(adminAction, adminEmail, adminReason);
-      adminEmail = '';
-      adminReason = '';
+      await addAdminAccessEntry(adminAction, email, reason);
       adminMessage = adminAction === 'admin' ? 'Administrator permission granted.' : 'Access list updated.';
-      await refreshAdminAccess();
+      void refreshAdminAccess();
     } catch (cause) {
+      adminAccess = previousAccess;
+      if (!adminEmail) adminEmail = email;
+      if (!adminReason) adminReason = reason;
       adminError = cause instanceof Error ? cause.message : 'Could not update user access.';
+    } finally {
+      adminEntrySaving = false;
     }
   };
 
@@ -409,32 +478,44 @@
   const toggleAdminAppGrant = async (
     userId: string,
     appSlug: string,
-    shouldGrant: boolean,
-    checkbox: HTMLInputElement
+    shouldGrant: boolean
   ) => {
     const key = `${userId}:${appSlug}`;
-    checkbox.checked = !shouldGrant;
     if (pendingAppGrants.has(key)) return;
     pendingAppGrants = new Set([...pendingAppGrants, key]);
     appGrantErrors = { ...appGrantErrors, [key]: '' };
     appGrantMessages = { ...appGrantMessages, [key]: '' };
+    const previousAccess = adminAccess;
+    if (adminAccess) {
+      adminAccess = {
+        ...adminAccess,
+        users: adminAccess.users.map((user) => {
+          if (user.user_id !== userId) return user;
+          const app_slugs = new Set(user.app_slugs);
+          if (shouldGrant) app_slugs.add(appSlug);
+          else app_slugs.delete(appSlug);
+          return { ...user, app_slugs: [...app_slugs] };
+        })
+      };
+    }
     try {
       if (shouldGrant) await grantAdminAppAccess(userId, appSlug);
       else await revokeAdminAppAccess(userId, appSlug);
-      if (adminAccess) {
+      appGrantMessages = { ...appGrantMessages, [key]: 'Saved.' };
+    } catch (cause) {
+      if (adminAccess && previousAccess) {
+        const previousUser = previousAccess.users.find((user) => user.user_id === userId);
         adminAccess = {
           ...adminAccess,
           users: adminAccess.users.map((user) => {
-            if (user.user_id !== userId) return user;
+            if (user.user_id !== userId || !previousUser) return user;
             const app_slugs = new Set(user.app_slugs);
-            if (shouldGrant) app_slugs.add(appSlug);
+            if (previousUser.app_slugs.includes(appSlug)) app_slugs.add(appSlug);
             else app_slugs.delete(appSlug);
             return { ...user, app_slugs: [...app_slugs] };
           })
         };
       }
-      appGrantMessages = { ...appGrantMessages, [key]: 'Saved.' };
-    } catch (cause) {
       appGrantErrors = {
         ...appGrantErrors,
         [key]: cause instanceof Error ? cause.message : 'Could not update project access.'
@@ -449,19 +530,41 @@
   const removeAccessEntry = async (action: 'whitelist' | 'blacklist' | 'admin', identifier: string) => {
     adminError = '';
     adminMessage = '';
+    const previousAccess = adminAccess;
+    if (adminAccess) {
+      if (action === 'whitelist' || action === 'blacklist') {
+        adminAccess = {
+          ...adminAccess,
+          [action]: adminAccess[action].filter((entry) => entry.email !== identifier)
+        };
+      } else {
+        adminAccess = {
+          ...adminAccess,
+          admins: adminAccess.admins.filter((admin) => admin.user_id !== identifier),
+          users: adminAccess.users.map((user) => user.user_id === identifier ? { ...user, is_admin: false } : user)
+        };
+      }
+    }
+    adminMessage = 'Removing access…';
     try {
       await removeAdminAccessEntry(action, identifier);
       adminMessage = action === 'admin' ? 'Administrator permission removed.' : 'User removed from the list.';
       if (action === 'admin' && identifier === authSession?.user?.id) {
-        authSession = await restoreAuth();
+        try {
+          authSession = await restoreAuth();
+        } catch (cause) {
+          adminError = cause instanceof Error ? cause.message : 'Could not refresh your administrator session.';
+          return;
+        }
         if (authSession?.user?.is_admin !== true) {
           adminOpen = false;
           adminAccess = null;
           return;
         }
       }
-      await refreshAdminAccess();
+      void refreshAdminAccess();
     } catch (cause) {
+      adminAccess = previousAccess;
       adminError = cause instanceof Error ? cause.message : 'Could not remove user access.';
     }
   };
@@ -471,13 +574,33 @@
     if (!window.confirm(`Are you sure you want to ${actionLabel} this user?`)) return;
     adminError = '';
     adminMessage = '';
+    const previousAccess = adminAccess;
+    const user = adminAccess?.users.find((entry) => entry.user_id === userId);
+    const userEmail = user?.email;
+    if (adminAccess && user) {
+      adminAccess = {
+        ...adminAccess,
+        users: adminAccess.users.map((entry) => entry.user_id === userId ? { ...entry, is_online: false } : entry),
+        ...(blacklist && userEmail
+          ? {
+              whitelist: adminAccess.whitelist.filter((entry) => entry.email.toLowerCase() !== userEmail.toLowerCase()),
+              blacklist: [
+                { email: userEmail, reason: null, updated_at: new Date().toISOString() },
+                ...adminAccess.blacklist.filter((entry) => entry.email.toLowerCase() !== userEmail.toLowerCase())
+              ]
+            }
+          : {})
+      };
+    }
+    adminMessage = blacklist ? 'Blacklisting and signing out…' : 'Signing out…';
     try {
       await kickAdminUser(userId, blacklist);
       adminMessage = blacklist
         ? 'User added to the blacklist and signed out.'
         : 'User signed out from all devices.';
-      await refreshAdminAccess();
+      void refreshAdminAccess();
     } catch (cause) {
+      adminAccess = previousAccess;
       adminError = cause instanceof Error ? cause.message : 'Could not sign out user.';
     }
   };
@@ -706,8 +829,8 @@
             <span>Key name</span>
             <input type="text" bind:value={apiKeyName} required maxlength="60" autocomplete="off" placeholder="My integration" />
           </label>
-          <button class="admin-submit" type="submit" disabled={apiKeysLoading || !apiKeyName.trim()}>
-            {apiKeysLoading ? 'Working…' : 'Create API key'} <span aria-hidden="true">↗</span>
+          <button class="admin-submit" type="submit" disabled={apiKeysLoading || apiKeyCreating || !apiKeyName.trim()}>
+            {apiKeyCreating ? 'Creating…' : apiKeysLoading ? 'Working…' : 'Create API key'} <span aria-hidden="true">↗</span>
           </button>
         </form>
         <section class="user-api-keys">
@@ -724,7 +847,9 @@
                   <strong>{key.name}</strong>
                   <small>{key.key_prefix}… · Created {new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(key.created_at))}{key.last_used_at ? ` · Last used ${new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(key.last_used_at))}` : ' · Never used'}</small>
                 </span>
-                <button class="text-button admin-block-button" onclick={() => void revokeApiKey(key)}>Revoke</button>
+                <button class="text-button admin-block-button" disabled={key.id.startsWith('pending:')} onclick={() => void revokeApiKey(key)}>
+                  {key.id.startsWith('pending:') ? 'Creating…' : 'Revoke'}
+                </button>
               </div>
             {/each}
           {:else}
@@ -748,6 +873,7 @@
             <input
               type="checkbox"
               checked={adminAccess.whitelist_enabled}
+              disabled={whitelistSaving}
               onchange={(event) => void saveWhitelistSetting(event.currentTarget.checked)}
             />
           </label>
@@ -770,7 +896,9 @@
                 <input type="text" bind:value={adminReason} maxlength="500" placeholder="Internal note" />
               </label>
             {/if}
-            <button class="admin-submit" type="submit">Save permission <span aria-hidden="true">↗</span></button>
+            <button class="admin-submit" type="submit" disabled={adminEntrySaving}>
+              {adminEntrySaving ? 'Saving…' : 'Save permission'} <span aria-hidden="true">↗</span>
+            </button>
           </form>
           <section class="admin-app-access" aria-labelledby="app-access-heading">
             <div class="section-heading">
@@ -847,8 +975,7 @@
                                 onchange={(event) => void toggleAdminAppGrant(
                                   rosterUser.user_id,
                                   app.slug,
-                                  event.currentTarget.checked,
-                                  event.currentTarget
+                                  event.currentTarget.checked
                                 )}
                               />
                               <span>{app.name}<small>{app.repository}</small></span>
