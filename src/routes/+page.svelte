@@ -274,25 +274,10 @@
     }
   };
 
-  const toggleProfileMenu = async (event: MouseEvent) => {
+  const toggleProfileMenu = (event: MouseEvent) => {
     event.stopPropagation();
-    if (profileMenuOpen) {
-      profileMenuOpen = false;
-      return;
-    }
-    try {
-      const session = await restoreAuth();
-      authSession = session;
-      if (session?.user?.is_admin !== true) {
-        adminAccess = null;
-      }
-      profileMenuOpen = Boolean(session);
-    } catch {
-      authSession = null;
-      adminOpen = false;
-      adminAccess = null;
-      profileMenuOpen = false;
-    }
+    if (authSession?.user?.is_admin !== true) adminAccess = null;
+    profileMenuOpen = !profileMenuOpen && Boolean(authSession);
   };
 
   const openAccount = async () => {
