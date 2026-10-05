@@ -77,6 +77,11 @@ export async function logout(): Promise<void> {
   if (!response.ok) throw new Error(`Could not log out (${response.status})`);
 }
 
+export async function sendPresenceHeartbeat(): Promise<void> {
+  const response = await request('/auth/presence', { method: 'POST' });
+  if (!response.ok) throw new Error(`Could not update presence (${response.status})`);
+}
+
 export async function getLisnntoLimits(): Promise<import('$lib/api').LisnntoLimits> {
   const response = await request('/auth/lisnnto-limits', {
     headers: { Accept: 'application/json' }

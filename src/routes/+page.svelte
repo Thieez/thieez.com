@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getLisnntoLimits, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, startLogin, updateWhitelistSetting, type AdminAccessData, type AuthSession, type UserApiKey } from '$lib/auth-client';
+  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getLisnntoLimits, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, startLogin, updateWhitelistSetting, type AdminAccessData, type AuthSession, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -56,6 +56,8 @@
   let apiKeyName = '';
   let pendingApiKeySequence = 0;
   let createdApiKey = '';
+  let presenceHeartbeatTimer: number | undefined;
+  let adminRosterRefreshTimer: number | undefined;
   let adminEmail = '';
   let adminReason = '';
   let adminAction: 'whitelist' | 'blacklist' | 'admin' = 'whitelist';
@@ -214,12 +216,33 @@
             if (session) {
               adminOpen = true;
               void refreshUserApiKeys();
-              if (session.user?.is_admin === true) void refreshAdminAccess();
+              if (session.user?.is_admin === true) {
+                void refreshAdminAccess();
+                adminRosterRefreshTimer = window.setInterval(() => {
+                  if (
+                    adminOpen &&
+                    authSession?.user?.is_admin === true &&
+                    !adminLoading &&
+                    !adminEntrySaving &&
+                    !whitelistSaving &&
+                    !pendingAppGrants.size
+                  ) {
+                    void refreshAdminAccess();
+                  }
+                }, 20_000);
+              }
             } else {
               void goto('/');
             }
           }
           if (session) {
+            const updatePresence = () => {
+              void sendPresenceHeartbeat().catch((cause) => {
+                console.error('Could not send website presence heartbeat', cause);
+              });
+            };
+            updatePresence();
+            presenceHeartbeatTimer = window.setInterval(updatePresence, 20_000);
             authRefreshTimer = window.setInterval(() => {
               void restoreAuth()
                 .then((updatedSession) => {
@@ -227,11 +250,27 @@
                   if (!updatedSession && authRefreshTimer !== undefined) {
                     window.clearInterval(authRefreshTimer);
                     authRefreshTimer = undefined;
+                    if (presenceHeartbeatTimer !== undefined) {
+                      window.clearInterval(presenceHeartbeatTimer);
+                      presenceHeartbeatTimer = undefined;
+                    }
+                    if (adminRosterRefreshTimer !== undefined) {
+                      window.clearInterval(adminRosterRefreshTimer);
+                      adminRosterRefreshTimer = undefined;
+                    }
                     if (data.isDashboard) void goto('/');
                   }
                 })
                 .catch(() => {
                   authSession = null;
+                  if (presenceHeartbeatTimer !== undefined) {
+                    window.clearInterval(presenceHeartbeatTimer);
+                    presenceHeartbeatTimer = undefined;
+                  }
+                  if (adminRosterRefreshTimer !== undefined) {
+                    window.clearInterval(adminRosterRefreshTimer);
+                    adminRosterRefreshTimer = undefined;
+                  }
                   if (data.isDashboard) void goto('/');
                 });
             }, 15 * 60 * 1000);
@@ -259,6 +298,8 @@
       unsubscribeProjects();
       unsubscribeHeartbeat();
       if (authRefreshTimer !== undefined) window.clearInterval(authRefreshTimer);
+      if (presenceHeartbeatTimer !== undefined) window.clearInterval(presenceHeartbeatTimer);
+      if (adminRosterRefreshTimer !== undefined) window.clearInterval(adminRosterRefreshTimer);
       document.removeEventListener('click', closeMenus);
       document.removeEventListener('keydown', handleDocumentKeydown);
     };
@@ -275,6 +316,10 @@
       limits = null;
       limitsError = '';
       if (authRefreshTimer !== undefined) window.clearInterval(authRefreshTimer);
+      if (presenceHeartbeatTimer !== undefined) window.clearInterval(presenceHeartbeatTimer);
+      presenceHeartbeatTimer = undefined;
+      if (adminRosterRefreshTimer !== undefined) window.clearInterval(adminRosterRefreshTimer);
+      adminRosterRefreshTimer = undefined;
     }
   };
 
