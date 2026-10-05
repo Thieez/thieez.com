@@ -1092,7 +1092,7 @@
                         onclick={() => toggleAdminUserDevices(rosterUser.user_id)}
                       >
                         {rosterUser.device_count}
-                        {rosterUser.device_count === 1 ? 'trusted device' : 'trusted devices'}
+                        {rosterUser.device_count === 1 ? 'session' : 'sessions'}
                         <span aria-hidden="true">{expandedDeviceUsers.has(rosterUser.user_id) ? '−' : '+'}</span>
                       </button>
                       <div class="admin-roster-actions">
