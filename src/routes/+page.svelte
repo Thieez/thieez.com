@@ -988,7 +988,7 @@
                           </span>
                           <span>
                             {rosterUser.device_count}
-                            {rosterUser.device_count === 1 ? 'device' : 'devices'}
+                            {rosterUser.device_count === 1 ? 'trusted device' : 'trusted devices'}
                           </span>
                           {#if rosterUser.is_admin}<span class="roster-admin-label">Administrator</span>{/if}
                         </small>
