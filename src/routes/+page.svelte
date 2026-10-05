@@ -625,7 +625,9 @@
     if (adminAccess && user) {
       adminAccess = {
         ...adminAccess,
-        users: adminAccess.users.map((entry) => entry.user_id === userId ? { ...entry, is_online: false } : entry),
+        users: adminAccess.users.map((entry) =>
+          entry.user_id === userId ? { ...entry, is_online: false, device_count: 0 } : entry
+        ),
         ...(blacklist && userEmail
           ? {
               whitelist: adminAccess.whitelist.filter((entry) => entry.email.toLowerCase() !== userEmail.toLowerCase()),
@@ -983,6 +985,10 @@
                         <small>
                           <span class:roster-online={rosterUser.is_online} class="roster-presence">
                             <i aria-hidden="true"></i>{rosterUser.is_online ? 'Online' : 'Offline'}
+                          </span>
+                          <span>
+                            {rosterUser.device_count}
+                            {rosterUser.device_count === 1 ? 'device' : 'devices'}
                           </span>
                           {#if rosterUser.is_admin}<span class="roster-admin-label">Administrator</span>{/if}
                         </small>

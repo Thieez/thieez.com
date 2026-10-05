@@ -1,5 +1,5 @@
 import { error, redirect, type RequestHandler } from '@sveltejs/kit';
-import { clearAuthCookies, setAuthCookies } from '$lib/server/auth';
+import { clearAuthCookies, ensureDeviceIdCookie, setAuthCookies } from '$lib/server/auth';
 
 const STATE_COOKIE = 'thieez_oauth_state';
 
@@ -39,7 +39,13 @@ export const GET: RequestHandler = ({ cookies, url, setHeaders }) => {
     throw error(400, 'The sign-in response was invalid. Please try again.');
   }
 
-  const deviceId = cookies.get('thieez_device_id') || crypto.randomUUID();
+  const callbackDeviceId = url.searchParams.get('device_id');
+  const storedDeviceId = cookies.get('thieez_device_id');
+  if (callbackDeviceId && storedDeviceId && callbackDeviceId !== storedDeviceId) {
+    clearAuthCookies(cookies, url);
+    throw error(400, 'The sign-in device could not be verified. Please try again.');
+  }
+  const deviceId = callbackDeviceId || storedDeviceId || ensureDeviceIdCookie(cookies, url);
   setAuthCookies(cookies, url, {
     access_token: accessToken,
     refresh_token: refreshToken,

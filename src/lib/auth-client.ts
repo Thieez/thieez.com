@@ -24,6 +24,7 @@ export type AdminAccessData = {
     name: string | null;
     is_online: boolean;
     last_active_at: string | null;
+    device_count: number;
     is_admin: boolean;
     app_slugs: string[];
   }>;

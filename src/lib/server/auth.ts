@@ -42,12 +42,22 @@ export function clearAuthCookies(cookies: Cookies, url: URL): void {
     ACCESS_COOKIE,
     ACCESS_EXPIRY_COOKIE,
     REFRESH_COOKIE,
-    DEVICE_COOKIE,
     COOKIE_SCOPE_COOKIE
   ]) {
     cookies.delete(name, legacyOptions);
     cookies.delete(name, options);
   }
+}
+
+export function ensureDeviceIdCookie(cookies: Cookies, url: URL): string {
+  const existing = cookies.get(DEVICE_COOKIE);
+  if (existing) return existing;
+  const deviceId = crypto.randomUUID();
+  cookies.set(DEVICE_COOKIE, deviceId, {
+    ...cookieOptions(url),
+    maxAge: SESSION_INACTIVITY_DAYS * 24 * 60 * 60
+  });
+  return deviceId;
 }
 
 export function setAuthCookies(
