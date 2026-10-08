@@ -89,6 +89,30 @@ h1 em{font-style:normal;color:#8d8a82}
 .account-project-row>span{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
 .project-access-allowed{color:var(--lime)}
 .project-access-denied{color:var(--muted)}
+.account-state{margin-top:32px}
+.account-sign-in{margin-top:28px}
+.account-identity{display:flex;align-items:center;gap:12px;margin-top:30px}
+.account-identity>span:last-child{display:flex;flex-direction:column;gap:4px}
+.account-identity strong{font-size:14px}
+.account-identity small{color:var(--muted);font-size:12px}
+.account-alpha-status{margin-top:42px}
+.account-alpha-status .section-heading{margin-bottom:12px}
+.account-alpha-card{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:20px;border:1px solid var(--line)}
+.account-alpha-card p{flex:1 1 100%;margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+.account-alpha-card .text-button{font-size:11px}
+.account-status-badge{display:inline-flex;padding:7px 10px;background:#e4e0d6;color:var(--muted);font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.account-status-active{background:var(--lime);color:var(--ink)}
+.account-status-pending{background:#f0e2bf;color:#76530b}
+.account-project-row{min-height:86px}
+.account-project-info{display:flex;flex-direction:column;gap:6px}
+.account-project-info strong{font-size:18px}
+.account-project-slug{color:var(--muted);font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase}
+.account-project-action{display:flex;align-items:center;gap:18px}
+.account-project-status{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.account-project-status.project-access-allowed{color:#647500}
+.account-project-status.project-access-denied{color:var(--muted)}
+.account-project-action .text-button{text-decoration:none;white-space:nowrap}
+@media(max-width:650px){.account-project-row{align-items:flex-start;flex-direction:column;gap:12px}.account-project-action{width:100%;justify-content:space-between}}
 .limits-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:58px}
 .limit-card{border:1px solid var(--ink);padding:24px;display:flex;flex-direction:column;gap:18px}
 .limit-label{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}

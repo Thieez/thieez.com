@@ -65,10 +65,11 @@ export async function loadPageData(
   url: URL
 ) {
   const isDashboard = url.pathname === '/dashboard';
+  const isAccount = url.pathname === '/account';
   const accessDenied = url.searchParams.has('access_denied');
   const accessCheckFailed = url.searchParams.has('access_check_failed');
   setHeaders(
-    isDashboard || accessDenied || accessCheckFailed
+    isDashboard || isAccount || accessDenied || accessCheckFailed
       ? { 'cache-control': 'no-store' }
       : {
           'cache-control':
@@ -101,7 +102,8 @@ export async function loadPageData(
       renderLimits: null,
       accessDenied,
       accessCheckFailed,
-      isDashboard
+      isDashboard,
+      isAccount
     };
   }
 
@@ -140,7 +142,8 @@ export async function loadPageData(
       renderLimits: null,
       accessDenied,
       accessCheckFailed,
-      isDashboard
+      isDashboard,
+      isAccount
     };
   }
 
@@ -178,6 +181,7 @@ export async function loadPageData(
     renderLimits,
     accessDenied,
     accessCheckFailed,
-    isDashboard
+    isDashboard,
+    isAccount
   };
 }

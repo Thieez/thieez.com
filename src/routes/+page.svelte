@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
+  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getAlphaAccessStatus, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AlphaAccessStatus, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -46,8 +46,9 @@
   let authSession: AuthSession | null = null;
   let authLoading = true;
   let dashboardAuthError = '';
+  let accountAuthError = '';
   let profileMenuOpen = false;
-  let accountOpen = false;
+  let accountOpen = data.isAccount;
   let adminOpen = false;
   let adminAccess: AdminAccessData | null = null;
   let adminLoading = false;
@@ -88,6 +89,9 @@
   let projectAccess: ProjectAccessStatus | null = null;
   let projectAccessLoading = false;
   let projectAccessError = '';
+  let alphaAccess: AlphaAccessStatus | null = null;
+  let alphaAccessLoading = false;
+  let alphaAccessError = '';
   let storage: DatabaseStorage | null = data.storage?.value ?? null;
   let storageLoading = false;
   let storageError = storage ? '' : data.storage?.error ?? '';
@@ -230,6 +234,7 @@
       const authTask = restoreAuth()
         .then((session) => {
           authSession = session;
+          if (data.isAccount && session) void loadAccountDetails();
           if (data.isDashboard) {
             if (session) {
               dashboardAuthError = '';
@@ -278,7 +283,7 @@
                       window.clearInterval(adminRosterRefreshTimer);
                       adminRosterRefreshTimer = undefined;
                     }
-                    if (data.isDashboard) void goto('/');
+                    if (data.isDashboard || data.isAccount) void goto('/');
                   }
                 })
                 .catch((cause) => {
@@ -303,6 +308,11 @@
           authSession = null;
           if (data.isDashboard) {
             dashboardAuthError = cause instanceof Error
+              ? cause.message
+              : 'Could not verify your session.';
+          }
+          if (data.isAccount) {
+            accountAuthError = cause instanceof Error
               ? cause.message
               : 'Could not verify your session.';
           }
@@ -349,6 +359,7 @@
       presenceHeartbeatTimer = undefined;
       if (adminRosterRefreshTimer !== undefined) window.clearInterval(adminRosterRefreshTimer);
       adminRosterRefreshTimer = undefined;
+      if (data.isAccount) void goto('/');
     }
   };
 
@@ -361,17 +372,13 @@
   const openAccount = async () => {
     profileMenuOpen = false;
     adminOpen = false;
-    accountOpen = true;
-    if (!authSession) return;
-    if (projectAccessLoading) return;
-    await loadProjectAccess();
-    if (projectAccessError) return;
-    if (!hasLisnntoAccess()) {
-      limits = null;
-      limitsError = '';
-      return;
-    }
-    if (limits || limitsLoading) return;
+    await goto('/account');
+  };
+
+  const loadAccountDetails = async () => {
+    if (!authSession || projectAccessLoading || alphaAccessLoading) return;
+    await Promise.all([loadProjectAccess(), loadAlphaAccess()]);
+    if (projectAccessError || !hasLisnntoAccess() || limits || limitsLoading) return;
     limitsLoading = true;
     limitsError = '';
     try {
@@ -397,6 +404,18 @@
       projectAccessError = cause instanceof Error ? cause.message : 'Could not load project access.';
     } finally {
       projectAccessLoading = false;
+    }
+  };
+
+  const loadAlphaAccess = async () => {
+    alphaAccessLoading = true;
+    alphaAccessError = '';
+    try {
+      alphaAccess = await getAlphaAccessStatus();
+    } catch (cause) {
+      alphaAccessError = cause instanceof Error ? cause.message : 'Could not load Alpha access.';
+    } finally {
+      alphaAccessLoading = false;
     }
   };
 
@@ -878,7 +897,6 @@
   const handleDocumentKeydown = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       profileMenuOpen = false;
-      accountOpen = false;
     }
   };
 
@@ -982,7 +1000,7 @@
 </script>
 
 <svelte:head>
-  <title>{isLisnnto ? 'Lisnnto — Thieez' : isNote ? 'Note — Thieez' : 'Thieez — Things we’re building'}</title>
+  <title>{data.isAccount ? 'Account — Thieez' : isLisnnto ? 'Lisnnto — Thieez' : isNote ? 'Note — Thieez' : 'Thieez — Things we’re building'}</title>
   <meta name="description" content="Independent software projects from Thieez." />
 </svelte:head>
 
@@ -1475,62 +1493,145 @@
       <section class="account-view" aria-labelledby="account-heading">
         <div class="account-topline">
           <p class="eyebrow">THIEEZ / ACCOUNT</p>
-          <button class="text-button" onclick={() => accountOpen = false}>Close <span aria-hidden="true">×</span></button>
+          <a class="text-button" href="/">Back to Thieez <span aria-hidden="true">↗</span></a>
         </div>
         <h1 id="account-heading">Your <em>account.</em></h1>
-        <p class="lede">Your project access and usage limits for your Lisnnto account.</p>
-        <section class="account-project-access" aria-labelledby="project-access-heading">
-          <div class="section-heading">
-            <h2 id="project-access-heading">Project access</h2>
+        {#if authLoading}
+          <div class="state-panel account-state" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking your account…</span></div>
+        {:else if accountAuthError}
+          <div class="state-panel error-panel account-state" role="alert">
+            <strong>Couldn’t verify your account.</strong>
+            <span>{accountAuthError}</span>
+            <button class="text-button" onclick={() => window.location.reload()}>Try again</button>
           </div>
-          {#if projectAccessLoading}
-            <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading project access…</span></div>
-          {:else if projectAccessError}
-            <div class="state-panel error-panel" role="alert">
-              <strong>Couldn’t load project access.</strong>
-              <span>{projectAccessError}</span>
-              <button class="text-button" onclick={openAccount}>Try again <span aria-hidden="true">↗</span></button>
-            </div>
-          {:else if projectAccess}
-            {#if projectAccess.projects.length}
-              <div class="account-project-list">
-                {#each projectAccess.projects as project (project.slug)}
-                  <div class="account-project-row">
-                    <strong>{project.name}</strong>
-                    <span class:project-access-allowed={project.allowed} class:project-access-denied={!project.allowed}>
-                      {project.allowed ? 'Has access' : 'No access'}
-                    </span>
-                  </div>
-                {/each}
-              </div>
+        {:else if !authSession}
+          <p class="lede">Sign in to view your Alpha status and project access.</p>
+          <button class="alpha-button account-sign-in" onclick={startLogin}>
+            Sign in with Google <span aria-hidden="true">↗</span>
+          </button>
+        {:else}
+          <div class="account-identity">
+            {#if avatarUrl}
+              <img src={avatarUrl} alt="" class="profile-avatar" />
             {:else}
-              <div class="state-panel">There are no published projects yet.</div>
+              <span class="profile-avatar profile-avatar-fallback" aria-hidden="true">{userInitial}</span>
             {/if}
-          {/if}
-        </section>
-        {#if projectAccess && !projectAccessLoading && !projectAccessError && hasLisnntoAccess()}
-          {#if limitsLoading}
-            <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading Lisnnto limits…</span></div>
-          {:else if limitsError}
-            <div class="state-panel error-panel" role="alert">
-              <strong>Couldn’t load your limits.</strong>
-              <span>{limitsError}</span>
-              <button class="text-button" onclick={openAccount}>Try again <span aria-hidden="true">↗</span></button>
+            <span><strong>{userLabel}</strong><small>{authSession.user?.email || 'Thieez account'}</small></span>
+          </div>
+
+          <section class="account-alpha-status" aria-labelledby="alpha-status-heading">
+            <div class="section-heading">
+              <h2 id="alpha-status-heading">Alpha access</h2>
             </div>
-          {:else if limits}
-            <div class="limits-grid">
-              <div class="limit-card">
-                <span class="limit-label">Saved tracks</span>
-                <strong>{limits.tracks_count} <small>/ {limits.tracks_limit}</small></strong>
-                <span class="limit-progress"><span style={`width: ${Math.min(100, (limits.tracks_count / Math.max(1, limits.tracks_limit)) * 100)}%`}></span></span>
+            {#if alphaAccessLoading}
+              <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Checking Alpha status…</span></div>
+            {:else if alphaAccessError}
+              <div class="state-panel error-panel" role="alert">
+                <strong>Couldn’t load Alpha status.</strong>
+                <span>{alphaAccessError}</span>
+                <button class="text-button" onclick={loadAlphaAccess}>Try again</button>
               </div>
-              <div class="limit-card">
-                <span class="limit-label">Playlists</span>
-                <strong>{limits.playlists_count} <small>/ {limits.playlists_limit}</small></strong>
-                <span class="limit-progress"><span style={`width: ${Math.min(100, (limits.playlists_count / Math.max(1, limits.playlists_limit)) * 100)}%`}></span></span>
+            {:else if alphaAccess}
+              <div class="account-alpha-card">
+                <span
+                  class="account-status-badge"
+                  class:account-status-active={alphaAccess.has_access}
+                  class:account-status-pending={alphaAccess.status === 'pending'}
+                >
+                  {alphaAccess.has_access
+                    ? 'Alpha user'
+                    : alphaAccess.status === 'pending'
+                      ? 'Waiting for Alpha access'
+                      : alphaAccess.status === 'approved'
+                        ? 'Approved · access inactive'
+                        : 'Not an Alpha user'}
+                </span>
+                <p>
+                  {alphaAccess.has_access
+                    ? 'Your account has Alpha access.'
+                    : alphaAccess.status === 'pending'
+                      ? 'Your request is awaiting administrator approval.'
+                      : alphaAccess.status === 'approved'
+                        ? 'Your request was approved, but Alpha access is currently inactive.'
+                        : alphaAccess.status === 'rejected'
+                          ? 'Your previous request was declined.'
+                          : alphaAccess.status === 'revoked'
+                            ? 'Your previous Alpha access was revoked.'
+                            : 'You have not requested Alpha access yet.'}
+                </p>
+                {#if !alphaAccess.has_access && alphaAccess.status !== 'pending' && alphaAccess.status !== 'approved'}
+                  <a class="text-button" href="/alpha">Request Alpha access <span aria-hidden="true">↗</span></a>
+                {/if}
               </div>
+            {/if}
+          </section>
+
+          <section class="account-project-access" aria-labelledby="project-access-heading">
+            <div class="section-heading">
+              <h2 id="project-access-heading">Project access</h2>
+              {#if projectAccess}
+                <span>{projectAccess.projects.filter((project) => project.allowed).length} of {projectAccess.projects.length} available</span>
+              {/if}
             </div>
-            <p class="limits-note">Limits adjust automatically as shared Lisnnto storage fills up.</p>
+            {#if projectAccessLoading}
+              <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading project access…</span></div>
+            {:else if projectAccessError}
+              <div class="state-panel error-panel" role="alert">
+                <strong>Couldn’t load project access.</strong>
+                <span>{projectAccessError}</span>
+                <button class="text-button" onclick={loadAccountDetails}>Try again</button>
+              </div>
+            {:else if projectAccess}
+              {#if projectAccess.projects.length}
+                <div class="account-project-list">
+                  {#each projectAccess.projects as project (project.slug)}
+                    <article class="account-project-row">
+                      <div class="account-project-info">
+                        <span class="account-project-slug">{project.slug}</span>
+                        <strong>{project.name}</strong>
+                      </div>
+                      <div class="account-project-action">
+                        <span
+                          class="account-project-status"
+                          class:project-access-allowed={project.allowed}
+                          class:project-access-denied={!project.allowed}
+                        >{project.allowed ? 'Access granted' : 'No access'}</span>
+                        {#if project.allowed && project.href}
+                          <a class="text-button" href={project.href}>Open project <span aria-hidden="true">↗</span></a>
+                        {/if}
+                      </div>
+                    </article>
+                  {/each}
+                </div>
+              {:else}
+                <div class="state-panel">There are no published projects yet.</div>
+              {/if}
+            {/if}
+          </section>
+          {#if projectAccess && !projectAccessLoading && !projectAccessError && hasLisnntoAccess()}
+            {#if limitsLoading}
+              <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading Lisnnto limits…</span></div>
+            {:else if limitsError}
+              <div class="state-panel error-panel" role="alert">
+                <strong>Couldn’t load your limits.</strong>
+                <span>{limitsError}</span>
+                <button class="text-button" onclick={loadAccountDetails}>Try again</button>
+              </div>
+            {:else if limits}
+              <div class="limits-grid">
+                <div class="limit-card">
+                  <span class="limit-label">Saved tracks</span>
+                  <strong>{limits.tracks_count} <small>/ {limits.tracks_limit}</small></strong>
+                  <span class="limit-progress"><span style={`width: ${Math.min(100, (limits.tracks_count / Math.max(1, limits.tracks_limit)) * 100)}%`}></span></span>
+                </div>
+                <div class="limit-card">
+                  <span class="limit-label">Playlists</span>
+                  <strong>{limits.playlists_count} <small>/ {limits.playlists_limit}</small></strong>
+                  <span class="limit-progress"><span style={`width: ${Math.min(100, (limits.playlists_count / Math.max(1, limits.playlists_limit)) * 100)}%`}></span></span>
+                </div>
+              </div>
+              <p class="limits-note">Limits adjust automatically as shared Lisnnto storage fills up.</p>
+            {/if}
           {/if}
         {/if}
       </section>
