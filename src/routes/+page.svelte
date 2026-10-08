@@ -333,6 +333,8 @@
       authSession = null;
       limits = null;
       limitsError = '';
+      projectAccess = null;
+      projectAccessError = '';
       if (authRefreshTimer !== undefined) window.clearInterval(authRefreshTimer);
       if (presenceHeartbeatTimer !== undefined) window.clearInterval(presenceHeartbeatTimer);
       presenceHeartbeatTimer = undefined;
@@ -352,7 +354,14 @@
     adminOpen = false;
     accountOpen = true;
     if (!authSession) return;
-    if (!projectAccess && !projectAccessLoading) void loadProjectAccess();
+    if (projectAccessLoading) return;
+    await loadProjectAccess();
+    if (projectAccessError) return;
+    if (!hasLisnntoAccess()) {
+      limits = null;
+      limitsError = '';
+      return;
+    }
     if (limits || limitsLoading) return;
     limitsLoading = true;
     limitsError = '';
@@ -364,6 +373,11 @@
       limitsLoading = false;
     }
   };
+
+  const hasLisnntoAccess = () =>
+    projectAccess?.projects.some(
+      (project) => project.slug.toLowerCase() === 'lisnnto' && project.allowed
+    ) === true;
 
   const loadProjectAccess = async () => {
     projectAccessLoading = true;
@@ -1014,7 +1028,7 @@
             {/if}
           </div>
         {:else}
-          <button class="auth-button" onclick={() => void goto('/alpha')}>Sign In</button>
+          <button class="auth-button" onclick={() => void goto('/alpha')}>Sign up for Alpha</button>
         {/if}
       {/if}
     </div>
@@ -1454,7 +1468,7 @@
             <div class="state-panel error-panel" role="alert">
               <strong>Couldn’t load project access.</strong>
               <span>{projectAccessError}</span>
-              <button class="text-button" onclick={loadProjectAccess}>Try again <span aria-hidden="true">↗</span></button>
+              <button class="text-button" onclick={openAccount}>Try again <span aria-hidden="true">↗</span></button>
             </div>
           {:else if projectAccess}
             {#if projectAccess.projects.length}
@@ -1473,28 +1487,30 @@
             {/if}
           {/if}
         </section>
-        {#if limitsLoading}
-          <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading Lisnnto limits…</span></div>
-        {:else if limitsError}
-          <div class="state-panel error-panel" role="alert">
-            <strong>Couldn’t load your limits.</strong>
-            <span>{limitsError}</span>
-            <button class="text-button" onclick={openAccount}>Try again <span aria-hidden="true">↗</span></button>
-          </div>
-        {:else if limits}
-          <div class="limits-grid">
-            <div class="limit-card">
-              <span class="limit-label">Saved tracks</span>
-              <strong>{limits.tracks_count} <small>/ {limits.tracks_limit}</small></strong>
-              <span class="limit-progress"><span style={`width: ${Math.min(100, (limits.tracks_count / Math.max(1, limits.tracks_limit)) * 100)}%`}></span></span>
+        {#if projectAccess && !projectAccessLoading && !projectAccessError && hasLisnntoAccess()}
+          {#if limitsLoading}
+            <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading Lisnnto limits…</span></div>
+          {:else if limitsError}
+            <div class="state-panel error-panel" role="alert">
+              <strong>Couldn’t load your limits.</strong>
+              <span>{limitsError}</span>
+              <button class="text-button" onclick={openAccount}>Try again <span aria-hidden="true">↗</span></button>
             </div>
-            <div class="limit-card">
-              <span class="limit-label">Playlists</span>
-              <strong>{limits.playlists_count} <small>/ {limits.playlists_limit}</small></strong>
-              <span class="limit-progress"><span style={`width: ${Math.min(100, (limits.playlists_count / Math.max(1, limits.playlists_limit)) * 100)}%`}></span></span>
+          {:else if limits}
+            <div class="limits-grid">
+              <div class="limit-card">
+                <span class="limit-label">Saved tracks</span>
+                <strong>{limits.tracks_count} <small>/ {limits.tracks_limit}</small></strong>
+                <span class="limit-progress"><span style={`width: ${Math.min(100, (limits.tracks_count / Math.max(1, limits.tracks_limit)) * 100)}%`}></span></span>
+              </div>
+              <div class="limit-card">
+                <span class="limit-label">Playlists</span>
+                <strong>{limits.playlists_count} <small>/ {limits.playlists_limit}</small></strong>
+                <span class="limit-progress"><span style={`width: ${Math.min(100, (limits.playlists_count / Math.max(1, limits.playlists_limit)) * 100)}%`}></span></span>
+              </div>
             </div>
-          </div>
-          <p class="limits-note">Limits adjust automatically as shared Lisnnto storage fills up.</p>
+            <p class="limits-note">Limits adjust automatically as shared Lisnnto storage fills up.</p>
+          {/if}
         {/if}
       </section>
     {:else if isLisnnto || isNote}

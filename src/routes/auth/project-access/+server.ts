@@ -4,7 +4,7 @@ import { clearAuthCookies, getAccessToken } from '$lib/server/auth';
 
 export const GET: RequestHandler = async ({ cookies, fetch, url }) => {
   try {
-    const accessToken = await getAccessToken(cookies, url, fetch);
+    let accessToken = await getAccessToken(cookies, url, fetch);
     if (!accessToken) {
       return json({ detail: 'Not authenticated' }, {
         status: 401,
@@ -12,12 +12,23 @@ export const GET: RequestHandler = async ({ cookies, fetch, url }) => {
       });
     }
 
-    const response = await fetch(`${AUTH_BASE}/project-access`, {
+    const requestProjectAccess = (token: string) => fetch(`${AUTH_BASE}/project-access`, {
       headers: {
         Accept: 'application/json',
         Authorization: `******`
       }
     });
+    let response = await requestProjectAccess(accessToken);
+    if (response.status === 401) {
+      accessToken = await getAccessToken(cookies, url, fetch, true);
+      if (!accessToken) {
+        return json({ detail: 'Not authenticated' }, {
+          status: 401,
+          headers: { 'cache-control': 'no-store' }
+        });
+      }
+      response = await requestProjectAccess(accessToken);
+    }
     if (response.status === 401) clearAuthCookies(cookies, url);
     const payload = await response.json();
     return json(payload, {
