@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getLisnntoLimits, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AuthSession, type UserApiKey } from '$lib/auth-client';
+  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getLisnntoLimits, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AuthSession, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -997,7 +997,7 @@
             {/if}
           </div>
         {:else}
-          <button class="auth-button" onclick={startLogin}>Log in with Google</button>
+          <button class="auth-button" onclick={() => void goto('/alpha')}>Sign In</button>
         {/if}
       {/if}
     </div>
