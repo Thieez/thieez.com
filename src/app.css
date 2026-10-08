@@ -81,6 +81,14 @@ h1 em{font-style:normal;color:#8d8a82}
 .account-view{padding:clamp(72px,12vw,150px) 0 110px;max-width:900px}
 .account-topline{display:flex;align-items:baseline;justify-content:space-between}
 .account-topline .eyebrow{margin-bottom:30px}
+.account-project-access{margin-top:50px}
+.account-project-access .section-heading{margin-bottom:12px}
+.account-project-list{border-top:1px solid var(--line)}
+.account-project-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 0;border-bottom:1px solid var(--line)}
+.account-project-row strong{font-size:17px}
+.account-project-row>span{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.project-access-allowed{color:var(--lime)}
+.project-access-denied{color:var(--muted)}
 .limits-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:58px}
 .limit-card{border:1px solid var(--ink);padding:24px;display:flex;flex-direction:column;gap:18px}
 .limit-label{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}

@@ -44,8 +44,9 @@ cookies instead of browser storage. Its server refreshes the access token with
 the API's rotating refresh-token endpoint and touches the API session while
 the user is active; both the browser cookie and API session expire after 30
 days of inactivity. Authenticated limits are proxied through the site server,
-so tokens are never exposed to page JavaScript. Configure the auth service CORS
-allowlist with the deployed website origin.
+so tokens are never exposed to page JavaScript. The Account view also lists
+access to each published project using the same server-side session. Configure
+the auth service CORS allowlist with the deployed website origin.
 
 `/alpha` starts the same Google sign-in flow and submits an access request for
 the signed-in user. Pending requests are denied authenticated API access until

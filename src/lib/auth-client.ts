@@ -50,6 +50,15 @@ export type AlphaAccessStatus = {
   has_access: boolean;
 };
 
+export type ProjectAccessStatus = {
+  projects: Array<{
+    slug: string;
+    name: string;
+    href: string;
+    allowed: boolean;
+  }>;
+};
+
 export type AdminDevice = {
   device_id: string;
   device_name: string | null;
@@ -132,6 +141,17 @@ export async function getLisnntoLimits(): Promise<import('$lib/api').LisnntoLimi
     throw new Error(`Could not load Lisnnto limits (${response.status})`);
   }
   return response.json() as Promise<import('$lib/api').LisnntoLimits>;
+}
+
+export async function getProjectAccess(): Promise<ProjectAccessStatus> {
+  const response = await request('/auth/project-access', {
+    headers: { Accept: 'application/json' }
+  });
+  const payload = (await response.json()) as ProjectAccessStatus & { detail?: string };
+  if (!response.ok) {
+    throw new Error(payload.detail || `Could not load project access (${response.status})`);
+  }
+  return payload;
 }
 
 async function requestAdmin<T>(

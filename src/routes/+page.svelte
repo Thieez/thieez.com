@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getLisnntoLimits, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AuthSession, type UserApiKey } from '$lib/auth-client';
+  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -84,6 +84,9 @@
   let limits: LisnntoLimits | null = null;
   let limitsLoading = false;
   let limitsError = '';
+  let projectAccess: ProjectAccessStatus | null = null;
+  let projectAccessLoading = false;
+  let projectAccessError = '';
   let storage: DatabaseStorage | null = data.storage?.value ?? null;
   let storageLoading = false;
   let storageError = storage ? '' : data.storage?.error ?? '';
@@ -348,7 +351,9 @@
     profileMenuOpen = false;
     adminOpen = false;
     accountOpen = true;
-    if (!authSession || limits || limitsLoading) return;
+    if (!authSession) return;
+    if (!projectAccess && !projectAccessLoading) void loadProjectAccess();
+    if (limits || limitsLoading) return;
     limitsLoading = true;
     limitsError = '';
     try {
@@ -357,6 +362,18 @@
       limitsError = cause instanceof Error ? cause.message : 'Could not load Lisnnto limits.';
     } finally {
       limitsLoading = false;
+    }
+  };
+
+  const loadProjectAccess = async () => {
+    projectAccessLoading = true;
+    projectAccessError = '';
+    try {
+      projectAccess = await getProjectAccess();
+    } catch (cause) {
+      projectAccessError = cause instanceof Error ? cause.message : 'Could not load project access.';
+    } finally {
+      projectAccessLoading = false;
     }
   };
 
@@ -1426,7 +1443,36 @@
           <button class="text-button" onclick={() => accountOpen = false}>Close <span aria-hidden="true">×</span></button>
         </div>
         <h1 id="account-heading">Your <em>account.</em></h1>
-        <p class="lede">Usage and storage limits for your Lisnnto account.</p>
+        <p class="lede">Your project access and usage limits for your Lisnnto account.</p>
+        <section class="account-project-access" aria-labelledby="project-access-heading">
+          <div class="section-heading">
+            <h2 id="project-access-heading">Project access</h2>
+          </div>
+          {#if projectAccessLoading}
+            <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading project access…</span></div>
+          {:else if projectAccessError}
+            <div class="state-panel error-panel" role="alert">
+              <strong>Couldn’t load project access.</strong>
+              <span>{projectAccessError}</span>
+              <button class="text-button" onclick={loadProjectAccess}>Try again <span aria-hidden="true">↗</span></button>
+            </div>
+          {:else if projectAccess}
+            {#if projectAccess.projects.length}
+              <div class="account-project-list">
+                {#each projectAccess.projects as project (project.slug)}
+                  <div class="account-project-row">
+                    <strong>{project.name}</strong>
+                    <span class:project-access-allowed={project.allowed} class:project-access-denied={!project.allowed}>
+                      {project.allowed ? 'Has access' : 'No access'}
+                    </span>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <div class="state-panel">There are no published projects yet.</div>
+            {/if}
+          {/if}
+        </section>
         {#if limitsLoading}
           <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading Lisnnto limits…</span></div>
         {:else if limitsError}
