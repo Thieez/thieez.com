@@ -239,6 +239,21 @@ export async function fetchWithAuthRefresh(
   return response;
 }
 
+export async function retryTransientRequest(
+  send: () => Promise<Response | null>
+): Promise<Response | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await send();
+      if (!response || response.status < 500 || attempt === 1) return response;
+    } catch (cause) {
+      if (attempt === 1) throw cause;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return null;
+}
+
 export async function getCurrentUser(
   cookies: Cookies,
   url: URL,
