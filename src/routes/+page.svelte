@@ -1027,9 +1027,11 @@
                 <button class="profile-dropdown-item" onclick={openAccount}>
                   <span>Account</span><span aria-hidden="true">↗</span>
                 </button>
-                <button class="profile-dropdown-item" onclick={openAdmin}>
-                  <span>Dashboard</span><span aria-hidden="true">↗</span>
-                </button>
+                {#if authSession.user?.is_admin === true}
+                  <button class="profile-dropdown-item" onclick={openAdmin}>
+                    <span>Dashboard</span><span aria-hidden="true">↗</span>
+                  </button>
+                {/if}
                 <button class="profile-dropdown-item profile-dropdown-logout" onclick={handleLogout}>
                   <span>Log out</span><span aria-hidden="true">↗</span>
                 </button>
