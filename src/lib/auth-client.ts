@@ -100,8 +100,14 @@ export async function restoreAuth(): Promise<AuthSession | null> {
   const response = await request('/auth/session', {
     headers: { Accept: 'application/json' }
   });
-  if (!response.ok) throw new Error(`Could not restore session (${response.status})`);
-  const payload = (await response.json()) as { user?: AuthUser | null; is_admin?: boolean };
+  const payload = (await response.json()) as {
+    user?: AuthUser | null;
+    is_admin?: boolean;
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(payload.error || `Could not restore session (${response.status})`);
+  }
   return payload.user
     ? { user: { ...payload.user, is_admin: payload.is_admin === true } }
     : null;

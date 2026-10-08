@@ -15,6 +15,17 @@ const refreshRequests = new Map<
   Promise<{ access_token: string; refresh_token: string; expires_in: number } | null>
 >();
 
+export class AuthApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly retryAfter: string | null
+  ) {
+    super(message);
+    this.name = 'AuthApiError';
+  }
+}
+
 type CookieOptions = {
   path: string;
   httpOnly: boolean;
@@ -167,7 +178,13 @@ export async function getAccessToken(
         body: JSON.stringify({ refresh_token: refreshToken, device_id: deviceId })
       });
       if (response.status === 401 || response.status === 403) return null;
-      if (!response.ok) throw new Error(`Auth API refresh failed (${response.status})`);
+      if (!response.ok) {
+        throw new AuthApiError(
+          `Auth API refresh failed (${response.status})`,
+          response.status,
+          response.headers.get('Retry-After')
+        );
+      }
 
       const tokens = (await response.json()) as {
         access_token?: string;
@@ -295,7 +312,13 @@ export async function getCurrentUser(
     clearAuthCookies(cookies, url);
     return null;
   }
-  if (!response.ok) throw new Error(`Auth API profile request failed (${response.status})`);
+  if (!response.ok) {
+    throw new AuthApiError(
+      `Auth API profile request failed (${response.status})`,
+      response.status,
+      response.headers.get('Retry-After')
+    );
+  }
 
   const payload = (await response.json()) as { user?: AuthUser; is_admin?: boolean };
   if (!payload.user) throw new Error('Auth API returned no user profile');

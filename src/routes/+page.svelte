@@ -230,9 +230,11 @@
             if (session) {
               dashboardAuthError = '';
               adminOpen = true;
-              void refreshUserApiKeys();
               if (session.user?.is_admin === true) {
-                void refreshAdminAccess();
+                void (async () => {
+                  await refreshAdminAccess();
+                  await refreshUserApiKeys();
+                })();
                 adminRosterRefreshTimer = window.setInterval(() => {
                   if (
                     adminOpen &&
@@ -245,7 +247,9 @@
                   ) {
                     void refreshAdminAccess();
                   }
-                }, 20_000);
+                }, 60_000);
+              } else {
+                void refreshUserApiKeys();
               }
             } else {
               void goto('/');

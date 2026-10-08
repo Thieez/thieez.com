@@ -1,5 +1,5 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { clearAuthCookies, getCurrentUser } from '$lib/server/auth';
+import { AuthApiError, clearAuthCookies, getCurrentUser } from '$lib/server/auth';
 
 export const GET: RequestHandler = async ({ cookies, fetch, url }) => {
   try {
@@ -20,9 +20,19 @@ export const GET: RequestHandler = async ({ cookies, fetch, url }) => {
     );
   } catch (cause) {
     console.error('Could not restore website auth session', cause);
-    return json({ error: 'Could not restore the session.' }, {
-      status: 502,
-      headers: { 'cache-control': 'no-store' }
+    const status = cause instanceof AuthApiError && cause.status === 429
+      ? 429
+      : 502;
+    const error = status === 429
+      ? 'The session service is rate-limited. Please wait before trying again.'
+      : 'Could not restore the session.';
+    const retryAfter = cause instanceof AuthApiError ? cause.retryAfter : null;
+    return json({ error }, {
+      status,
+      headers: {
+        'cache-control': 'no-store',
+        ...(retryAfter ? { 'retry-after': retryAfter } : {})
+      }
     });
   }
 };

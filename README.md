@@ -58,6 +58,8 @@ the signed-in user. Pending requests are denied authenticated API access until
 an administrator approves them from the access panel. Approval grants access
 to all published projects and sends an email using the API's configured Resend
 sender; administrators can later grant or revoke all-project access.
+The dashboard loads the administrator roster before API keys, and refreshes
+that roster once per minute to avoid bursts against the authentication API.
 
 ## Build and deploy
 
