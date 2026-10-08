@@ -10,6 +10,10 @@ const DEVICE_COOKIE = 'thieez_device_id';
 const COOKIE_SCOPE_COOKIE = 'thieez_cookie_scope';
 const SESSION_INACTIVITY_DAYS = 30;
 const SESSION_INACTIVITY_SECONDS = SESSION_INACTIVITY_DAYS * 24 * 60 * 60;
+const refreshRequests = new Map<
+  string,
+  Promise<{ access_token: string; refresh_token: string; expires_in: number } | null>
+>();
 
 type CookieOptions = {
   path: string;
@@ -34,6 +38,24 @@ function cookieOptions(url: URL): CookieOptions {
     sameSite: 'lax',
     ...(sharedCookieDomain(url) ? { domain: sharedCookieDomain(url) } : {})
   };
+}
+
+function extendSessionCookieLifetimes(cookies: Cookies, url: URL, refreshToken: string, deviceId: string): void {
+  const options = cookieOptions(url);
+  cookies.set(REFRESH_COOKIE, refreshToken, {
+    ...options,
+    maxAge: SESSION_INACTIVITY_SECONDS
+  });
+  cookies.set(DEVICE_COOKIE, deviceId, {
+    ...options,
+    maxAge: SESSION_INACTIVITY_SECONDS
+  });
+  if (sharedCookieDomain(url)) {
+    cookies.set(COOKIE_SCOPE_COOKIE, 'shared', {
+      ...options,
+      maxAge: SESSION_INACTIVITY_SECONDS
+    });
+  }
 }
 
 export function clearAuthCookies(cookies: Cookies, url: URL): void {
@@ -123,6 +145,8 @@ export async function getAccessToken(
         refresh_token: refreshToken,
         expires_in: Math.floor((expiresAt - Date.now()) / 1000)
       }, deviceId);
+    } else if (refreshToken && deviceId) {
+      extendSessionCookieLifetimes(cookies, url, refreshToken, deviceId);
     }
     return accessToken;
   }
@@ -134,34 +158,53 @@ export async function getAccessToken(
     return null;
   }
 
-  const response = await fetcher(`${AUTH_BASE}/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ refresh_token: refreshToken, device_id: deviceId })
-  });
-  if (response.status === 401 || response.status === 403) {
+  let refreshRequest = refreshRequests.get(deviceId);
+  if (!refreshRequest) {
+    refreshRequest = (async () => {
+      const response = await fetcher(`${AUTH_BASE}/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken, device_id: deviceId })
+      });
+      if (response.status === 401 || response.status === 403) return null;
+      if (!response.ok) throw new Error(`Auth API refresh failed (${response.status})`);
+
+      const tokens = (await response.json()) as {
+        access_token?: string;
+        refresh_token?: string;
+        expires_in?: number;
+      };
+      if (
+        typeof tokens.access_token !== 'string' ||
+        !tokens.access_token ||
+        typeof tokens.refresh_token !== 'string' ||
+        !tokens.refresh_token ||
+        typeof tokens.expires_in !== 'number' ||
+        !Number.isFinite(tokens.expires_in) ||
+        !Number.isInteger(tokens.expires_in) ||
+        tokens.expires_in <= 0 ||
+        tokens.expires_in > 86_400
+      ) {
+        throw new Error('Auth API returned an invalid refreshed session');
+      }
+      return {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_in: tokens.expires_in
+      };
+    })();
+    refreshRequests.set(deviceId, refreshRequest);
+  }
+
+  let tokens: { access_token: string; refresh_token: string; expires_in: number } | null;
+  try {
+    tokens = await refreshRequest;
+  } finally {
+    if (refreshRequests.get(deviceId) === refreshRequest) refreshRequests.delete(deviceId);
+  }
+  if (!tokens) {
     clearAuthCookies(cookies, url);
     return null;
-  }
-  if (!response.ok) throw new Error(`Auth API refresh failed (${response.status})`);
-
-  const tokens = (await response.json()) as {
-    access_token?: string;
-    refresh_token?: string;
-    expires_in?: number;
-  };
-  if (
-    typeof tokens.access_token !== 'string' ||
-    !tokens.access_token ||
-    typeof tokens.refresh_token !== 'string' ||
-    !tokens.refresh_token ||
-    typeof tokens.expires_in !== 'number' ||
-    !Number.isFinite(tokens.expires_in) ||
-    !Number.isInteger(tokens.expires_in) ||
-    tokens.expires_in <= 0 ||
-    tokens.expires_in > 86_400
-  ) {
-    throw new Error('Auth API returned an invalid refreshed session');
   }
 
   setAuthCookies(cookies, url, {
@@ -217,19 +260,8 @@ export async function getCurrentUser(
   const payload = (await response.json()) as { user?: AuthUser; is_admin?: boolean };
   if (!payload.user) throw new Error('Auth API returned no user profile');
 
-  const refreshToken = cookies.get(REFRESH_COOKIE);
-  if (refreshToken && deviceId) {
-    cookies.set(REFRESH_COOKIE, refreshToken, {
-      ...cookieOptions(url),
-      maxAge: SESSION_INACTIVITY_SECONDS
-    });
-    cookies.set(DEVICE_COOKIE, deviceId, {
-      ...cookieOptions(url),
-      maxAge: SESSION_INACTIVITY_SECONDS
-    });
-  }
   return {
-    accessToken: cookies.get(ACCESS_COOKIE) ?? accessToken,
+    accessToken,
     user: { ...payload.user, is_admin: payload.is_admin === true }
   };
 }
