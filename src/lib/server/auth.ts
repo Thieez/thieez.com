@@ -9,6 +9,7 @@ const REFRESH_COOKIE = 'thieez_refresh';
 const DEVICE_COOKIE = 'thieez_device_id';
 const COOKIE_SCOPE_COOKIE = 'thieez_cookie_scope';
 const SESSION_INACTIVITY_DAYS = 30;
+const SESSION_INACTIVITY_SECONDS = SESSION_INACTIVITY_DAYS * 24 * 60 * 60;
 
 type CookieOptions = {
   path: string;
@@ -55,7 +56,7 @@ export function ensureDeviceIdCookie(cookies: Cookies, url: URL): string {
   const deviceId = crypto.randomUUID();
   cookies.set(DEVICE_COOKIE, deviceId, {
     ...cookieOptions(url),
-    maxAge: SESSION_INACTIVITY_DAYS * 24 * 60 * 60
+    maxAge: SESSION_INACTIVITY_SECONDS
   });
   return deviceId;
 }
@@ -73,24 +74,24 @@ export function setAuthCookies(
   }
   cookies.set(ACCESS_COOKIE, tokens.access_token, {
     ...options,
-    maxAge: tokens.expires_in
+    maxAge: SESSION_INACTIVITY_SECONDS
   });
   cookies.set(ACCESS_EXPIRY_COOKIE, String(now + tokens.expires_in * 1000), {
     ...options,
-    maxAge: tokens.expires_in
+    maxAge: SESSION_INACTIVITY_SECONDS
   });
   cookies.set(REFRESH_COOKIE, tokens.refresh_token, {
     ...options,
-    maxAge: SESSION_INACTIVITY_DAYS * 24 * 60 * 60
+    maxAge: SESSION_INACTIVITY_SECONDS
   });
   cookies.set(DEVICE_COOKIE, deviceId, {
     ...options,
-    maxAge: SESSION_INACTIVITY_DAYS * 24 * 60 * 60
+    maxAge: SESSION_INACTIVITY_SECONDS
   });
   if (sharedCookieDomain(url)) {
     cookies.set(COOKIE_SCOPE_COOKIE, 'shared', {
       ...options,
-      maxAge: SESSION_INACTIVITY_DAYS * 24 * 60 * 60
+      maxAge: SESSION_INACTIVITY_SECONDS
     });
   }
 }
@@ -220,11 +221,11 @@ export async function getCurrentUser(
   if (refreshToken && deviceId) {
     cookies.set(REFRESH_COOKIE, refreshToken, {
       ...cookieOptions(url),
-      maxAge: SESSION_INACTIVITY_DAYS * 24 * 60 * 60
+      maxAge: SESSION_INACTIVITY_SECONDS
     });
     cookies.set(DEVICE_COOKIE, deviceId, {
       ...cookieOptions(url),
-      maxAge: SESSION_INACTIVITY_DAYS * 24 * 60 * 60
+      maxAge: SESSION_INACTIVITY_SECONDS
     });
   }
   return {

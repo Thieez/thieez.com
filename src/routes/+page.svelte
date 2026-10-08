@@ -287,19 +287,7 @@
                   }
                 })
                 .catch((cause) => {
-                  if (data.isDashboard) {
-                    console.error('Could not refresh dashboard auth session', cause);
-                    return;
-                  }
-                  authSession = null;
-                  if (presenceHeartbeatTimer !== undefined) {
-                    window.clearInterval(presenceHeartbeatTimer);
-                    presenceHeartbeatTimer = undefined;
-                  }
-                  if (adminRosterRefreshTimer !== undefined) {
-                    window.clearInterval(adminRosterRefreshTimer);
-                    adminRosterRefreshTimer = undefined;
-                  }
+                  console.error('Could not refresh website auth session', cause);
                 });
             }, 15 * 60 * 1000);
           }
