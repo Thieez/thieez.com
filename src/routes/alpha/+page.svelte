@@ -47,7 +47,7 @@
   <title>Thieez Alpha</title>
   <meta
     name="description"
-    content="Sign up with Google to request access to Thieez Alpha."
+    content="Sign in with Google to request access to Thieez Alpha."
   />
 </svelte:head>
 
@@ -61,7 +61,7 @@
 
   <main class="main-content alpha-content">
     <p class="eyebrow">THIEEZ / EARLY ACCESS</p>
-    <h1>Sign up for <em>Alpha.</em></h1>
+    <h1>Sign in for <em>Alpha.</em></h1>
 
     {#if loading}
       <div class="state-panel alpha-state" aria-live="polite">
@@ -76,10 +76,10 @@
       </div>
     {:else if !session}
       <p class="lede alpha-copy">
-        Sign up with Google to request access. An administrator will review your request.
+        Sign in with Google to request access. An administrator will review your request.
       </p>
       <button class="alpha-button" onclick={startLogin}>
-        Sign up for Alpha <span aria-hidden="true">↗</span>
+        Sign in <span aria-hidden="true">↗</span>
       </button>
     {:else if status?.status === 'pending'}
       <p class="lede alpha-copy">Your access request is waiting for administrator approval.</p>
@@ -100,7 +100,7 @@
             ? 'Your previous Alpha access has been revoked. You can request access again.'
             : status?.status === 'approved'
               ? 'Your Alpha request was approved, but project access is currently disabled.'
-              : 'Sign up with Google to request access. An administrator will review your request.'}
+              : 'Sign in with Google to request access. An administrator will review your request.'}
       </p>
       <button class="alpha-button" disabled={submitting} onclick={() => void requestAccess()}>
         {submitting ? 'Submitting…' : status?.status === 'not_requested' ? 'Request Alpha access' : 'Request access again'}

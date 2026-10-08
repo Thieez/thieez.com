@@ -1046,7 +1046,7 @@
             {/if}
           </div>
         {:else}
-          <button class="auth-button" onclick={() => void goto('/alpha')}>Sign up for Alpha</button>
+          <button class="auth-button" onclick={() => void goto('/alpha')}>Sign in</button>
         {/if}
       {/if}
     </div>
