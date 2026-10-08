@@ -1,6 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { AUTH_BASE } from '$lib/api';
-import { clearAuthCookies, getAccessToken } from '$lib/server/auth';
+import { fetchWithAuthRefresh } from '$lib/server/auth';
 
 async function proxyAlphaAccessRequest({
   cookies,
@@ -9,22 +9,22 @@ async function proxyAlphaAccessRequest({
   url
 }: Parameters<RequestHandler>[0]): Promise<Response> {
   try {
-    const accessToken = await getAccessToken(cookies, url, fetch);
-    if (!accessToken) {
+    const response = await fetchWithAuthRefresh(cookies, url, fetch, (accessToken) =>
+      fetch(`${AUTH_BASE}/alpha/access-request`, {
+        method: request.method,
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        }
+      })
+    );
+    if (!response) {
       return json({ detail: 'Not authenticated' }, {
         status: 401,
         headers: { 'cache-control': 'no-store' }
       });
     }
 
-    const response = await fetch(`${AUTH_BASE}/alpha/access-request`, {
-      method: request.method,
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${accessToken}`
-      }
-    });
-    if (response.status === 401) clearAuthCookies(cookies, url);
     const payload = await response.json();
     return json(payload, {
       status: response.status,

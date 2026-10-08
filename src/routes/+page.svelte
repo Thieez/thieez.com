@@ -365,7 +365,8 @@
 
   const loadAccountDetails = async () => {
     if (!authSession || projectAccessLoading || alphaAccessLoading) return;
-    await Promise.all([loadProjectAccess(), loadAlphaAccess()]);
+    await loadProjectAccess();
+    await loadAlphaAccess();
     if (projectAccessError || !hasLisnntoAccess() || limits || limitsLoading) return;
     limitsLoading = true;
     limitsError = '';

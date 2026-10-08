@@ -215,12 +215,36 @@ export async function getAccessToken(
   return tokens.access_token;
 }
 
+export async function fetchWithAuthRefresh(
+  cookies: Cookies,
+  url: URL,
+  fetcher: typeof fetch,
+  send: (accessToken: string) => Promise<Response>,
+  initialAccessToken?: string
+): Promise<Response | null> {
+  let accessToken = initialAccessToken ?? await getAccessToken(cookies, url, fetcher);
+  if (!accessToken) return null;
+
+  let response = await send(accessToken);
+  if (response.status !== 401) return response;
+
+  accessToken = await getAccessToken(cookies, url, fetcher, true);
+  if (!accessToken) {
+    clearAuthCookies(cookies, url);
+    return null;
+  }
+
+  response = await send(accessToken);
+  if (response.status === 401) clearAuthCookies(cookies, url);
+  return response;
+}
+
 export async function getCurrentUser(
   cookies: Cookies,
   url: URL,
   fetcher: typeof fetch
 ): Promise<{ accessToken: string; user: AuthUser } | null> {
-  const accessToken = await getAccessToken(cookies, url, fetcher);
+  let accessToken = await getAccessToken(cookies, url, fetcher);
   if (!accessToken) return null;
 
   const deviceId = cookies.get(DEVICE_COOKIE);
@@ -238,6 +262,7 @@ export async function getCurrentUser(
       clearAuthCookies(cookies, url);
       return null;
     }
+    accessToken = refreshedToken;
     response = await fetcher(`${AUTH_BASE}/me`, {
       headers: {
         Accept: 'application/json',
