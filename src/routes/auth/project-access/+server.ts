@@ -1,34 +1,23 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { AUTH_BASE } from '$lib/api';
-import { clearAuthCookies, getAccessToken } from '$lib/server/auth';
+import { clearAuthCookies, getCurrentUser } from '$lib/server/auth';
 
 export const GET: RequestHandler = async ({ cookies, fetch, url }) => {
   try {
-    let accessToken = await getAccessToken(cookies, url, fetch);
-    if (!accessToken) {
+    const session = await getCurrentUser(cookies, url, fetch);
+    if (!session) {
       return json({ detail: 'Not authenticated' }, {
         status: 401,
         headers: { 'cache-control': 'no-store' }
       });
     }
 
-    const requestProjectAccess = (token: string) => fetch(`${AUTH_BASE}/project-access`, {
+    const response = await fetch(`${AUTH_BASE}/project-access`, {
       headers: {
         Accept: 'application/json',
         Authorization: `******`
       }
     });
-    let response = await requestProjectAccess(accessToken);
-    if (response.status === 401) {
-      accessToken = await getAccessToken(cookies, url, fetch, true);
-      if (!accessToken) {
-        return json({ detail: 'Not authenticated' }, {
-          status: 401,
-          headers: { 'cache-control': 'no-store' }
-        });
-      }
-      response = await requestProjectAccess(accessToken);
-    }
     if (response.status === 401) clearAuthCookies(cookies, url);
     const payload = await response.json();
     return json(payload, {
