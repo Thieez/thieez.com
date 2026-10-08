@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getLisnntoLimits, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, signOutAdminDevice, startLogin, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AuthSession, type UserApiKey } from '$lib/auth-client';
+  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getLisnntoLimits, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AuthSession, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -76,6 +76,9 @@
   let deviceActionErrors: Record<string, string> = {};
   let deviceActionMessages: Record<string, string> = {};
   let pendingAppGrants = new Set<string>();
+  let pendingAlphaActions = new Set<string>();
+  let alphaActionErrors: Record<string, string> = {};
+  let alphaActionMessages: Record<string, string> = {};
   let appGrantErrors: Record<string, string> = {};
   let appGrantMessages: Record<string, string> = {};
   let limits: LisnntoLimits | null = null;
@@ -236,7 +239,8 @@
                     !adminLoading &&
                     !adminEntrySaving &&
                     !whitelistSaving &&
-                    !pendingAppGrants.size
+                    !pendingAppGrants.size &&
+                    !pendingAlphaActions.size
                   ) {
                     void refreshAdminAccess();
                   }
@@ -668,6 +672,84 @@
     }
   };
 
+  const toggleAdminAllProjectsAccess = async (
+    userId: string,
+    shouldGrant: boolean
+  ) => {
+    const key = `all:${userId}`;
+    if (pendingAlphaActions.has(key) || !adminAccess) return;
+    const previousAccess = adminAccess;
+    pendingAlphaActions = new Set([...pendingAlphaActions, key]);
+    alphaActionErrors = { ...alphaActionErrors, [key]: '' };
+    alphaActionMessages = { ...alphaActionMessages, [key]: '' };
+    adminAccess = {
+      ...adminAccess,
+      users: adminAccess.users.map((user) => user.user_id === userId
+        ? {
+            ...user,
+            all_projects_access: shouldGrant,
+            app_slugs: shouldGrant ? user.app_slugs : []
+          }
+        : user)
+    };
+    try {
+      await setAdminAllProjectsAccess(userId, shouldGrant);
+      alphaActionMessages = {
+        ...alphaActionMessages,
+        [key]: shouldGrant ? 'Access to all projects granted.' : 'Access to all projects revoked.'
+      };
+    } catch (cause) {
+      adminAccess = previousAccess;
+      alphaActionErrors = {
+        ...alphaActionErrors,
+        [key]: cause instanceof Error ? cause.message : 'Could not update all-project access.'
+      };
+    } finally {
+      const pending = new Set(pendingAlphaActions);
+      pending.delete(key);
+      pendingAlphaActions = pending;
+      void refreshAdminAccess();
+    }
+  };
+
+  const handleAlphaRequest = async (
+    userId: string,
+    action: 'approve_alpha' | 'reject_alpha' | 'retry_alpha_notification'
+  ) => {
+    const key = `request:${userId}`;
+    if (pendingAlphaActions.has(key)) return;
+    pendingAlphaActions = new Set([...pendingAlphaActions, key]);
+    alphaActionErrors = { ...alphaActionErrors, [key]: '' };
+    alphaActionMessages = { ...alphaActionMessages, [key]: '' };
+    try {
+      await updateAdminAlphaRequest(userId, action);
+      alphaActionMessages = {
+        ...alphaActionMessages,
+        [key]: action === 'reject_alpha'
+          ? 'Alpha request rejected.'
+          : action === 'retry_alpha_notification'
+            ? 'Access email sent.'
+            : 'Alpha access approved.'
+      };
+      adminError = '';
+      adminMessage = action === 'reject_alpha'
+        ? 'Alpha access request rejected.'
+        : action === 'retry_alpha_notification'
+          ? 'Alpha access email sent.'
+          : 'Alpha access approved and all projects granted.';
+    } catch (cause) {
+      alphaActionErrors = {
+        ...alphaActionErrors,
+        [key]: cause instanceof Error ? cause.message : 'Could not update Alpha access.'
+      };
+    } finally {
+      const pending = new Set(pendingAlphaActions);
+      pending.delete(key);
+      pendingAlphaActions = pending;
+      void refreshAdminAccess();
+    }
+  };
+
   const removeAccessEntry = async (action: 'whitelist' | 'blacklist' | 'admin', identifier: string) => {
     adminError = '';
     adminMessage = '';
@@ -1043,6 +1125,57 @@
               {adminEntrySaving ? 'Saving…' : 'Save permission'} <span aria-hidden="true">↗</span>
             </button>
           </form>
+          <section class="admin-alpha-requests" aria-labelledby="alpha-requests-heading">
+            <div class="section-heading">
+              <h2 id="alpha-requests-heading">Alpha access requests</h2>
+              <span>{adminAccess.alpha_requests.length} needs attention</span>
+            </div>
+            {#if adminAccess.alpha_requests.length}
+              <div class="admin-alpha-request-list">
+                {#each adminAccess.alpha_requests as alphaRequest (alphaRequest.user_id)}
+                  {@const actionKey = `request:${alphaRequest.user_id}`}
+                  <article class="admin-alpha-request">
+                    <div>
+                      <strong>{alphaRequest.name || alphaRequest.email || alphaRequest.user_id}</strong>
+                      {#if alphaRequest.name && alphaRequest.email}<small>{alphaRequest.email}</small>{/if}
+                      <small>
+                        {alphaRequest.status === 'pending'
+                          ? `Requested ${alphaRequest.requested_at ? new Date(alphaRequest.requested_at).toLocaleDateString() : 'recently'}`
+                          : 'Access granted; notification email not sent'}
+                      </small>
+                    </div>
+                    <div class="admin-alpha-actions">
+                      {#if alphaRequest.status === 'pending'}
+                        <button
+                          class="admin-submit"
+                          disabled={pendingAlphaActions.has(actionKey)}
+                          onclick={() => void handleAlphaRequest(alphaRequest.user_id, 'approve_alpha')}
+                        >Approve</button>
+                        <button
+                          class="text-button admin-block-button"
+                          disabled={pendingAlphaActions.has(actionKey)}
+                          onclick={() => void handleAlphaRequest(alphaRequest.user_id, 'reject_alpha')}
+                        >Reject</button>
+                      {:else}
+                        <button
+                          class="admin-submit"
+                          disabled={pendingAlphaActions.has(actionKey)}
+                          onclick={() => void handleAlphaRequest(alphaRequest.user_id, 'retry_alpha_notification')}
+                        >Retry email</button>
+                      {/if}
+                    </div>
+                    {#if alphaActionErrors[actionKey]}
+                      <small class="grant-error" role="alert">{alphaActionErrors[actionKey]}</small>
+                    {:else if alphaActionMessages[actionKey]}
+                      <small class="grant-feedback" role="status">{alphaActionMessages[actionKey]}</small>
+                    {/if}
+                  </article>
+                {/each}
+              </div>
+            {:else}
+              <p class="admin-empty">There are no pending Alpha requests or undelivered approval emails.</p>
+            {/if}
+          </section>
           <section class="admin-app-access" aria-labelledby="app-access-heading">
             <div class="section-heading">
               <h2 id="app-access-heading">Project access</h2>
@@ -1103,7 +1236,7 @@
                           onclick={() => toggleAdminUserProjects(rosterUser.user_id)}
                         >
                           {expandedAdminUsers.has(rosterUser.user_id) ? 'Hide projects' : 'Projects'}
-                          <span>{rosterUser.app_slugs.length}/{adminAccess.apps.length}</span>
+                          <span>{rosterUser.all_projects_access ? 'All projects' : `${rosterUser.app_slugs.length}/${adminAccess.apps.length}`}</span>
                         </button>
                         {#if rosterUser.user_id !== authSession?.user?.id}
                           <button class="text-button" onclick={() => void kickOnlineUser(rosterUser.user_id)}>Sign out</button>
@@ -1114,15 +1247,34 @@
                       </div>
                     </div>
                     {#if expandedAdminUsers.has(rosterUser.user_id)}
+                      {@const allProjectsKey = `all:${rosterUser.user_id}`}
                       <div class="admin-project-checklist" id={`projects-${rosterUser.user_id}`}>
+                        <label class="admin-project-option admin-all-project-option">
+                          <input
+                            type="checkbox"
+                            checked={rosterUser.all_projects_access}
+                            disabled={pendingAlphaActions.has(allProjectsKey)}
+                            aria-label={`All project access for ${rosterUser.email || rosterUser.name || rosterUser.user_id}`}
+                            onchange={(event) => void toggleAdminAllProjectsAccess(
+                              rosterUser.user_id,
+                              event.currentTarget.checked
+                            )}
+                          />
+                          <span>All projects access<small>Grant or revoke access to every published project</small></span>
+                          {#if alphaActionErrors[allProjectsKey]}
+                            <small class="grant-error" role="alert">{alphaActionErrors[allProjectsKey]}</small>
+                          {:else if alphaActionMessages[allProjectsKey]}
+                            <small class="grant-feedback" role="status">{alphaActionMessages[allProjectsKey]}</small>
+                          {/if}
+                        </label>
                         {#if adminAccess.apps.length}
                           {#each adminAccess.apps as app (app.slug)}
                             {@const grantKey = `${rosterUser.user_id}:${app.slug}`}
                             <label class="admin-project-option">
                               <input
                                 type="checkbox"
-                                checked={rosterUser.app_slugs.includes(app.slug)}
-                                disabled={pendingAppGrants.has(grantKey)}
+                                checked={rosterUser.all_projects_access || rosterUser.app_slugs.includes(app.slug)}
+                                disabled={rosterUser.all_projects_access || pendingAppGrants.has(grantKey)}
                                 aria-label={`${app.name} access for ${rosterUser.email || rosterUser.name || rosterUser.user_id}`}
                                 aria-describedby={appGrantErrors[grantKey] ? `grant-error-${grantKey}` : undefined}
                                 onchange={(event) => void toggleAdminAppGrant(

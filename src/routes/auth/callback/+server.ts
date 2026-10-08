@@ -1,4 +1,5 @@
 import { error, redirect, type RequestHandler } from '@sveltejs/kit';
+import { AUTH_BASE } from '$lib/api';
 import { clearAuthCookies, ensureDeviceIdCookie, setAuthCookies } from '$lib/server/auth';
 
 const STATE_COOKIE = 'thieez_oauth_state';
@@ -11,7 +12,7 @@ function safeReturnTo(value: string | null, origin: string): string {
   return target.origin === origin ? `${target.pathname}${target.search}${target.hash}` : '/';
 }
 
-export const GET: RequestHandler = ({ cookies, url, setHeaders }) => {
+export const GET: RequestHandler = async ({ cookies, fetch, url, setHeaders }) => {
   setHeaders({
     'cache-control': 'no-store',
     'referrer-policy': 'no-referrer'
@@ -46,11 +47,37 @@ export const GET: RequestHandler = ({ cookies, url, setHeaders }) => {
     throw error(400, 'The sign-in device could not be verified. Please try again.');
   }
   const deviceId = callbackDeviceId || storedDeviceId || ensureDeviceIdCookie(cookies, url);
+  const returnTo = safeReturnTo(url.searchParams.get('return_to'), url.origin);
+  if (new URL(returnTo, url.origin).pathname === '/alpha') {
+    let response: Response;
+    try {
+      response = await fetch(`${AUTH_BASE}/alpha/access-request`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        }
+      });
+    } catch (cause) {
+      console.error('Could not submit Alpha access request after sign-in', cause);
+      throw error(502, 'Could not submit your Alpha access request. Please try signing in again.');
+    }
+    if (!response.ok) {
+      let detail = 'Could not submit your Alpha access request.';
+      try {
+        const payload = (await response.json()) as { detail?: string };
+        if (payload.detail) detail = payload.detail;
+      } catch {
+        // Keep the generic message when the API response is not JSON.
+      }
+      throw error(response.status, detail);
+    }
+  }
   setAuthCookies(cookies, url, {
     access_token: accessToken,
     refresh_token: refreshToken,
     expires_in: expiresIn
   }, deviceId);
 
-  throw redirect(303, safeReturnTo(url.searchParams.get('return_to'), url.origin));
+  throw redirect(303, returnTo);
 };

@@ -18,6 +18,14 @@ export type AdminAccessData = {
   whitelist: AdminAccessEntry[];
   blacklist: AdminAccessEntry[];
   apps: Array<{ slug: string; name: string; repository: string }>;
+  alpha_requests: Array<{
+    user_id: string;
+    email: string | null;
+    name: string | null;
+    status: 'pending' | 'approved';
+    requested_at: string | null;
+    notification_sent: boolean;
+  }>;
   users: Array<{
     user_id: string;
     email: string | null;
@@ -27,11 +35,19 @@ export type AdminAccessData = {
     device_count: number;
     is_admin: boolean;
     app_slugs: string[];
+    all_projects_access: boolean;
   }>;
   page: number;
   page_size: number;
   has_more: boolean;
   admins: Array<{ user_id: string; email: string | null; name: string | null }>;
+};
+
+export type AlphaAccessStatus = {
+  status: 'not_requested' | 'pending' | 'approved' | 'rejected' | 'revoked';
+  requested_at: string | null;
+  reviewed_at: string | null;
+  has_access: boolean;
 };
 
 export type AdminDevice = {
@@ -80,6 +96,22 @@ export async function restoreAuth(): Promise<AuthSession | null> {
   return payload.user
     ? { user: { ...payload.user, is_admin: payload.is_admin === true } }
     : null;
+}
+
+export async function getAlphaAccessStatus(): Promise<AlphaAccessStatus> {
+  const response = await request('/auth/alpha-access-request', {
+    headers: { Accept: 'application/json' }
+  });
+  const payload = (await response.json()) as AlphaAccessStatus & { detail?: string };
+  if (!response.ok) throw new Error(payload.detail || `Could not load Alpha access (${response.status})`);
+  return payload;
+}
+
+export async function submitAlphaAccessRequest(): Promise<AlphaAccessStatus> {
+  const response = await request('/auth/alpha-access-request', { method: 'POST' });
+  const payload = (await response.json()) as AlphaAccessStatus & { detail?: string };
+  if (!response.ok) throw new Error(payload.detail || `Could not request Alpha access (${response.status})`);
+  return payload;
 }
 
 export async function logout(): Promise<void> {
@@ -216,6 +248,24 @@ export async function grantAdminAppAccess(user_id: string, app_slug: string): Pr
     action: 'grant_app',
     user_id,
     app_slug
+  });
+}
+
+export async function updateAdminAlphaRequest(
+  user_id: string,
+  action: 'approve_alpha' | 'reject_alpha' | 'retry_alpha_notification'
+): Promise<void> {
+  await requestAdmin<Record<string, unknown>>('POST', { action, user_id });
+}
+
+export async function setAdminAllProjectsAccess(
+  user_id: string,
+  enabled: boolean
+): Promise<void> {
+  await requestAdmin<Record<string, unknown>>('POST', {
+    action: 'all_projects',
+    user_id,
+    enabled
   });
 }
 
