@@ -45,6 +45,7 @@
   let hasProjectsData = data.projects?.value !== null && data.projects?.value !== undefined;
   let authSession: AuthSession | null = null;
   let authLoading = true;
+  let dashboardAuthError = '';
   let profileMenuOpen = false;
   let accountOpen = false;
   let adminOpen = false;
@@ -231,6 +232,7 @@
           authSession = session;
           if (data.isDashboard) {
             if (session) {
+              dashboardAuthError = '';
               adminOpen = true;
               void refreshUserApiKeys();
               if (session.user?.is_admin === true) {
@@ -279,7 +281,11 @@
                     if (data.isDashboard) void goto('/');
                   }
                 })
-                .catch(() => {
+                .catch((cause) => {
+                  if (data.isDashboard) {
+                    console.error('Could not refresh dashboard auth session', cause);
+                    return;
+                  }
                   authSession = null;
                   if (presenceHeartbeatTimer !== undefined) {
                     window.clearInterval(presenceHeartbeatTimer);
@@ -289,14 +295,17 @@
                     window.clearInterval(adminRosterRefreshTimer);
                     adminRosterRefreshTimer = undefined;
                   }
-                  if (data.isDashboard) void goto('/');
                 });
             }, 15 * 60 * 1000);
           }
         })
-        .catch(() => {
+        .catch((cause) => {
           authSession = null;
-          if (data.isDashboard) void goto('/');
+          if (data.isDashboard) {
+            dashboardAuthError = cause instanceof Error
+              ? cause.message
+              : 'Could not verify your session.';
+          }
         })
         .finally(() => {
           authLoading = false;
@@ -1056,6 +1065,16 @@
         <h1 id="access-check-heading">Access check <em>unavailable.</em></h1>
         <p class="lede">We couldn’t verify access right now. Please try again shortly.</p>
         <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
+      </section>
+    {:else if data.isDashboard && dashboardAuthError}
+      <section class="account-view" aria-labelledby="dashboard-auth-error-heading">
+        <p class="eyebrow">THIEEZ / DASHBOARD</p>
+        <h1 id="dashboard-auth-error-heading">Session check <em>unavailable.</em></h1>
+        <p class="lede">We couldn’t verify your session, so the dashboard couldn’t be loaded. Your account hasn’t been signed out.</p>
+        <div class="state-panel error-panel admin-feedback" role="alert">
+          <span>{dashboardAuthError}</span>
+          <button class="text-button" onclick={() => window.location.reload()}>Try again</button>
+        </div>
       </section>
     {:else if adminOpen}
       <section class="account-view admin-view" aria-labelledby="admin-heading">
