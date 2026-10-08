@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
-  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
+  import { getApkAsset, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
   import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getAlphaAccessStatus, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AlphaAccessStatus, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
@@ -23,6 +23,7 @@
   let projects: Project[] = data.projects?.value?.projects ?? [];
   let build: LatestBuild | null = data.build?.value ?? null;
   let loading = false;
+  let projectRefresh: Promise<void> | null = null;
   let error = data.build?.value ? '' : data.build?.error ?? '';
   let projectError = data.projects?.value ? '' : data.projects?.error ?? '';
   let apiStatus: 'checking' | 'online' | 'degraded' | 'offline' =
@@ -132,59 +133,38 @@
 
   const load = async () => {
     detectExperience();
+    if ((!isLisnnto && !isNote) || loading) return;
     if (accessDenied || accessCheckFailed) {
       loading = false;
       return;
     }
-    loading = isLisnnto || isNote ? build === null : !hasProjectsData;
+    loading = build === null;
     error = '';
-    projectError = '';
-    apiStatus = isLisnnto || isNote
-      ? build ? 'online' : 'checking'
-      : hasProjectsData ? 'online' : 'checking';
+    apiStatus = build ? 'online' : 'checking';
 
-    if (isLisnnto || isNote) {
-      try {
-        build = isNote ? await getLatestPluginBuild() : await getLatestBuild();
-        apiStatus = 'online';
-      } catch (cause) {
-        if (build) {
-          apiStatus = 'degraded';
-          markStale('build', true);
-        } else {
-          apiStatus = 'offline';
-          error = cause instanceof Error ? cause.message : 'The latest build could not be loaded.';
-        }
+    try {
+      build = isNote ? await getLatestPluginBuild() : await getLatestBuild();
+      apiStatus = 'online';
+    } catch (cause) {
+      if (build) {
+        apiStatus = 'degraded';
+        markStale('build', true);
+      } else {
+        apiStatus = 'offline';
+        error = cause instanceof Error ? cause.message : 'The latest build could not be loaded.';
       }
-    } else {
-      storageLoading = storage === null;
-      storageError = '';
-      renderLimitsLoading = renderLimits === null;
-      renderLimitsError = '';
-      void getDatabaseStorage()
-        .then((result) => {
-          storage = result;
-          markStale('storage', false);
-        })
-        .catch((cause) => {
-          if (storage) markStale('storage', true);
-          else storageError = cause instanceof Error ? cause.message : 'Database storage could not be loaded.';
-        })
-        .finally(() => {
-          storageLoading = false;
-        });
-      void getRenderLimits()
-        .then((result) => {
-          renderLimits = result;
-          markStale('render', false);
-        })
-        .catch((cause) => {
-          if (renderLimits) markStale('render', true);
-          else renderLimitsError = cause instanceof Error ? cause.message : 'Render limits could not be loaded.';
-        })
-        .finally(() => {
-          renderLimitsLoading = false;
-        });
+    }
+
+    loading = false;
+  };
+
+  const refreshProjects = async () => {
+    if (projectRefresh) return projectRefresh;
+
+    const refresh = (async () => {
+      loading = !hasProjectsData;
+      if (!hasProjectsData) apiStatus = 'checking';
+      projectError = '';
       try {
         const result = await getProjects();
         projects = result.projects;
@@ -199,10 +179,14 @@
           apiStatus = 'offline';
           projectError = cause instanceof Error ? cause.message : 'Projects could not be loaded.';
         }
+      } finally {
+        loading = false;
+        projectRefresh = null;
       }
-    }
+    })();
+    projectRefresh = refresh;
 
-    loading = false;
+    return refresh;
   };
 
   const markStale = (resource: string, stale: boolean) => {
@@ -228,6 +212,13 @@
     if (!isLisnnto && !isNote) {
       unsubscribeHeartbeat = subscribeToApiHeartbeat((connection) => {
         heartbeatConnection = connection;
+        if (data.isDashboard || data.isAccount) {
+          apiStatus = connection === 'connected'
+            ? 'online'
+            : connection === 'disconnected'
+              ? 'offline'
+              : 'checking';
+        }
       });
     }
     void (async () => {
@@ -309,12 +300,11 @@
           authLoading = false;
         });
 
-      await load();
       await authTask;
 
-      if (!isLisnnto && !isNote) {
+      if (!data.isDashboard && !data.isAccount && !isLisnnto && !isNote) {
         unsubscribeProjects = subscribeToProjectUpdates(() => {
-          void load();
+          void refreshProjects();
         });
       }
     })();
@@ -409,6 +399,7 @@
   };
 
   const refreshAdminAccess = async (page = adminUserPage) => {
+    if (adminLoading) return;
     adminLoading = true;
     adminError = '';
     try {
@@ -422,6 +413,7 @@
   };
 
   const refreshUserApiKeys = async () => {
+    if (apiKeysLoading) return;
     apiKeysLoading = true;
     apiKeysError = '';
     try {
@@ -1863,7 +1855,7 @@
         {#if loading}
           <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading the index…</span></div>
         {:else if projectError}
-          <div class="state-panel error-panel" role="alert"><strong>The index is taking a break.</strong><span>{projectError}</span><button class="text-button" onclick={load}>Try again <span aria-hidden="true">↗</span></button></div>
+          <div class="state-panel error-panel" role="alert"><strong>The index is taking a break.</strong><span>{projectError}</span><button class="text-button" onclick={refreshProjects}>Try again <span aria-hidden="true">↗</span></button></div>
         {:else if projects.length}
           <div class="project-list">
             {#each projects as project, index}

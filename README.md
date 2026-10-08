@@ -32,8 +32,11 @@ once per second, and the page reconnects if the connection is lost. While
 disconnected, the graph shows an animated red flatline and reports that there
 is no heartbeat.
 
-Other public page data is loaded during server rendering and kept in a
-per-process cache for 60 seconds. The rendered page is also cached at the
+Public page data is loaded during server rendering and kept in a per-process
+cache for 60 seconds; the browser uses that result instead of immediately
+requesting the same data again. The account and dashboard pages skip unrelated
+public data requests, and project-update events refresh only the project list.
+The rendered page is also cached at the
 Vercel edge for 60 seconds, with stale responses allowed during revalidation
 for up to 24 hours. The process cache itself is lost on server restart.
 

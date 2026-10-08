@@ -107,6 +107,23 @@ export async function loadPageData(
     };
   }
 
+  if (isDashboard || isAccount) {
+    return {
+      isLisnnto,
+      isNote,
+      projectSlug,
+      projectName,
+      build: null,
+      projects: null,
+      storage: null,
+      renderLimits: null,
+      accessDenied,
+      accessCheckFailed,
+      isDashboard,
+      isAccount
+    };
+  }
+
   if (isLisnnto || isNote) {
     const build = await cached<LatestBuild | PluginBuild>(`build:${projectSlug}`, async () => {
       if (isNote) {
