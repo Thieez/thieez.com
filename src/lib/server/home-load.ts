@@ -22,6 +22,7 @@ type CacheEntry = {
 };
 
 const cache = new Map<string, CacheEntry>();
+type ProjectReleaseStatus = 'released' | 'unreleased' | 'unavailable' | null;
 
 async function cached<T>(key: string, fetcher: () => Promise<T>): Promise<CachedResult<T>> {
   const previous = cache.get(key) as CacheEntry | undefined;
@@ -59,6 +60,19 @@ async function fetchJson<T>(fetcher: typeof fetch, path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function loadProjects(fetcher: typeof fetch): Promise<CachedResult<ProjectResult>> {
+  return cached<ProjectResult>('projects', async () => {
+    try {
+      const payload = await fetchJson<Project[] | { projects?: Project[] }>(fetcher, '/projects/v0');
+      return { projects: Array.isArray(payload) ? payload : payload.projects ?? [], source: 'api' };
+    } catch (cause) {
+      const status = cause instanceof Error ? Number(cause.message.match(/\d+/)?.[0]) : undefined;
+      if (status === 404 || status === 405) return { projects: [], source: 'fallback' };
+      throw cause;
+    }
+  });
+}
+
 export async function loadPageData(
   fetcher: typeof fetch,
   setHeaders: (headers: Record<string, string>) => void,
@@ -77,15 +91,6 @@ export async function loadPageData(
       hostProject !== 'www' &&
       hostProject !== 'api');
   const accessCheckFailed = url.searchParams.has('access_check_failed');
-  setHeaders(
-    isDashboard || isAccount || accessDenied || accessCheckFailed
-      ? { 'cache-control': 'no-store' }
-      : {
-          'cache-control':
-            'public, max-age=0, s-maxage=60, stale-while-revalidate=86400, stale-if-error=86400'
-        }
-  );
-
   const configuredProject = url.searchParams.get('project')?.trim().toLowerCase() || '';
   const projectSlug = configuredProject || (hostProject !== 'www' && hostProject !== 'api' ? hostProject : '');
   const isLisnnto = projectSlug === 'lisnnto';
@@ -95,6 +100,56 @@ export async function loadPageData(
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+  let projectReleaseStatus: ProjectReleaseStatus = null;
+
+  if (
+    hostProject &&
+    hostProject !== 'www' &&
+    hostProject !== 'api' &&
+    !isDashboard &&
+    !isAccount &&
+    !accessDenied &&
+    !accessCheckFailed
+  ) {
+    const projectIndex = await loadProjects(fetcher);
+    const publishedProject = projectIndex.value?.projects.find(
+      (project) => project.slug.toLowerCase() === hostProject
+    );
+    if (publishedProject) {
+      try {
+        await fetchJson<LatestBuild>(
+          fetcher,
+          `/updates/v0/${encodeURIComponent(publishedProject.slug)}/latest`
+        );
+        projectReleaseStatus = 'released';
+      } catch (cause) {
+        const status = cause instanceof Error ? Number(cause.message.match(/\d+/)?.[0]) : undefined;
+        if (status === 404) {
+          projectReleaseStatus = 'unreleased';
+        } else {
+          console.error('Could not check project release status', cause);
+          projectReleaseStatus = 'unavailable';
+        }
+      }
+    } else if (projectIndex.error) {
+      console.error('Could not load projects to check release status', projectIndex.error);
+      projectReleaseStatus = 'unavailable';
+    }
+  }
+
+  setHeaders(
+    isDashboard ||
+      isAccount ||
+      accessDenied ||
+      accessCheckFailed ||
+      projectReleaseStatus === 'unreleased' ||
+      projectReleaseStatus === 'unavailable'
+      ? { 'cache-control': 'no-store' }
+      : {
+          'cache-control':
+            'public, max-age=0, s-maxage=60, stale-while-revalidate=86400, stale-if-error=86400'
+        }
+  );
 
   if (accessDenied || accessCheckFailed) {
     return {
@@ -109,7 +164,8 @@ export async function loadPageData(
       accessDenied,
       accessCheckFailed,
       isDashboard,
-      isAccount
+      isAccount,
+      projectReleaseStatus
     };
   }
 
@@ -126,7 +182,8 @@ export async function loadPageData(
       accessDenied,
       accessCheckFailed,
       isDashboard,
-      isAccount
+      isAccount,
+      projectReleaseStatus
     };
   }
 
@@ -166,21 +223,13 @@ export async function loadPageData(
       accessDenied,
       accessCheckFailed,
       isDashboard,
-      isAccount
+      isAccount,
+      projectReleaseStatus
     };
   }
 
   const [projects, storage, renderLimits] = await Promise.all([
-    cached<ProjectResult>('projects', async () => {
-      try {
-        const payload = await fetchJson<Project[] | { projects?: Project[] }>(fetcher, '/projects/v0');
-        return { projects: Array.isArray(payload) ? payload : payload.projects ?? [], source: 'api' };
-      } catch (cause) {
-        const status = cause instanceof Error ? Number(cause.message.match(/\d+/)?.[0]) : undefined;
-        if (status === 404 || status === 405) return { projects: [], source: 'fallback' };
-        throw cause;
-      }
-    }),
+    loadProjects(fetcher),
     cached<DatabaseStorage>('database-storage', () => fetchJson(fetcher, '/lisnnto/v0/storage')),
     cached<RenderLimits>('render-limits', async () => {
       try {
@@ -205,6 +254,7 @@ export async function loadPageData(
     accessDenied,
     accessCheckFailed,
     isDashboard,
-    isAccount
+    isAccount,
+    projectReleaseStatus
   };
 }

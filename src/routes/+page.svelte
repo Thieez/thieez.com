@@ -991,7 +991,19 @@
 </script>
 
 <svelte:head>
-  <title>{data.isAccount ? 'Account — Thieez' : isLisnnto ? 'Lisnnto — Thieez' : isNote ? 'Note — Thieez' : 'Thieez — Things we’re building'}</title>
+  <title>
+    {data.projectReleaseStatus === 'unreleased'
+      ? `${projectName} — Not released yet`
+      : data.projectReleaseStatus === 'unavailable'
+        ? `${projectName} — Release status unavailable`
+        : data.isAccount
+          ? 'Account — Thieez'
+          : isLisnnto
+            ? 'Lisnnto — Thieez'
+            : isNote
+              ? 'Note — Thieez'
+              : 'Thieez — Things we’re building'}
+  </title>
   <meta name="description" content="Independent software projects from Thieez." />
 </svelte:head>
 
@@ -1652,6 +1664,20 @@
             {/if}
           {/if}
         {/if}
+      </section>
+    {:else if data.projectReleaseStatus === 'unreleased'}
+      <section class="account-view" aria-labelledby="project-unreleased-heading">
+        <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
+        <h1 id="project-unreleased-heading">Not released <em>yet.</em></h1>
+        <p class="lede">This project is published on Thieez, but it hasn’t been released yet. Check back soon.</p>
+        <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
+      </section>
+    {:else if data.projectReleaseStatus === 'unavailable'}
+      <section class="account-view" aria-labelledby="project-release-check-heading">
+        <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
+        <h1 id="project-release-check-heading">Release check <em>unavailable.</em></h1>
+        <p class="lede">We couldn’t check whether this project has been released. Please try again shortly.</p>
+        <button class="text-button" onclick={() => window.location.reload()}>Try again <span aria-hidden="true">↗</span></button>
       </section>
     {:else if isLisnnto || isNote}
       <section class="hero download-hero" aria-labelledby="download-heading">
