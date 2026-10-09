@@ -19,5 +19,5 @@ export const load: PageServerLoad = async ({ cookies, fetch, setHeaders, url }) 
   ) {
     await getAccessToken(cookies, url, fetch);
   }
-  return loadPageData(setHeaders, url);
+  return loadPageData(setHeaders, url, Boolean(cookies.get('thieez_refresh')));
 };

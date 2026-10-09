@@ -22,15 +22,20 @@ URLs are resolved against the API origin, including when the API returns a
 relative path.
 
 The homepage subscribes to `wss://api.thieez.com/projects/v0/updates` and
-refreshes the list after a signed GitHub `Repository` webhook event.
+refreshes the list after a signed GitHub `Repository` webhook event. The
+browser caches the public project list briefly; webhook refreshes bypass that
+cache. The API serves its last known public catalog while refreshing GitHub in
+the background, without using stale catalog data for access checks.
 It also displays live Supabase database usage from the public
 `/lisnnto/v0/storage` endpoint.
 
 The API heartbeat is a direct browser WebSocket connection to
-`/uptime/v0/heartbeat`; it does not use UptimeRobot. The API sends a heartbeat
-once per second, and the page reconnects if the connection is lost. While
-disconnected, the graph shows an animated red flatline and reports that there
-is no heartbeat.
+`/uptime/v0/heartbeat`; it does not use UptimeRobot. The page opens this
+connection only when the heartbeat section is near the viewport. The API sends
+a heartbeat once per second, and the page reconnects if the connection is lost.
+While disconnected, the graph shows an animated red flatline and reports that
+there is no heartbeat. Anonymous visits also skip the session check request;
+the server indicates whether an auth cookie exists without exposing its value.
 
 The page shell renders without waiting for public API calls. The browser loads
 release details and builds after the page appears; the project index and

@@ -33,11 +33,13 @@ type HomePageData = {
   projectReleaseStatus: ProjectReleaseStatus;
   project: Project | null;
   projectRelease: CachedResult<LatestBuild> | null;
+  hasAuthSession: boolean;
 };
 
 export function loadPageData(
   setHeaders: (headers: Record<string, string>) => void,
-  url: URL
+  url: URL,
+  hasAuthSession = false
 ): HomePageData {
   const isDashboard = url.pathname === '/dashboard';
   const isAccount = url.pathname === '/account';
@@ -63,7 +65,7 @@ export function loadPageData(
     .join(' ');
 
   setHeaders(
-    isDashboard || isAccount || accessDenied || accessCheckFailed
+    isDashboard || isAccount || accessDenied || accessCheckFailed || hasAuthSession
       ? { 'cache-control': 'no-store' }
       : {
           'cache-control':
@@ -87,6 +89,7 @@ export function loadPageData(
     isProjectHost,
     projectReleaseStatus: null,
     project: null,
-    projectRelease: null
+    projectRelease: null,
+    hasAuthSession
   };
 }

@@ -125,9 +125,12 @@ type Release = {
   assets?: ApiAsset[];
 };
 
-async function fetchJson<T>(path: string): Promise<T> {
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Accept')) headers.set('Accept', 'application/json');
   const response = await fetchWithTimeout(`${API_BASE}${path}`, {
-    headers: { Accept: 'application/json' }
+    ...init,
+    headers
   });
 
   if (!response.ok) {
@@ -148,9 +151,11 @@ async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): P
     window.clearTimeout(timeout);
   }
 }
-export async function getProjects(): Promise<ProjectResult> {
+export async function getProjects(forceRefresh = false): Promise<ProjectResult> {
   try {
-    const payload = await fetchJson<Project[] | { projects?: Project[] }>('/projects/v0');
+    const payload = await fetchJson<Project[] | { projects?: Project[] }>('/projects/v0', {
+      cache: forceRefresh ? 'reload' : 'default'
+    });
     const projects = Array.isArray(payload) ? payload : payload.projects ?? [];
     return { projects, source: 'api' };
   } catch (cause) {

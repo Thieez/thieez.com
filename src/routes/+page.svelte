@@ -183,7 +183,7 @@
     loading = false;
   };
 
-  const refreshProjects = async () => {
+  const refreshProjects = async (forceRefresh = false) => {
     if (projectRefresh) return projectRefresh;
 
     const refresh = (async () => {
@@ -191,7 +191,7 @@
       if (!hasProjectsData) apiStatus = 'checking';
       projectError = '';
       try {
-        const result = await getProjects();
+        const result = await getProjects(forceRefresh);
         projects = result.projects;
         hasProjectsData = true;
         markStale('projects', false);
@@ -300,6 +300,32 @@
     return { destroy: () => observer.disconnect() };
   };
 
+  const loadHeartbeatWhenVisible = (node: HTMLElement) => {
+    let unsubscribe: () => void = () => undefined;
+    const connect = () => {
+      unsubscribe = subscribeToApiHeartbeat((connection) => {
+        heartbeatConnection = connection;
+      });
+    };
+    if (typeof IntersectionObserver === 'undefined') {
+      connect();
+      return { destroy: () => unsubscribe() };
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        connect();
+      }
+    }, { rootMargin: '200px' });
+    observer.observe(node);
+    return {
+      destroy: () => {
+        observer.disconnect();
+        unsubscribe();
+      }
+    };
+  };
+
   const loadRenderLimitsWhenVisible = (node: HTMLElement) => {
     if (renderLimits) return;
     const loadLimits = () => {
@@ -343,16 +369,14 @@
     }
     let unsubscribeProjects: () => void = () => undefined;
     let unsubscribeHeartbeat: () => void = () => undefined;
-    if (!isLisnnto && !isNote) {
+    if (data.isDashboard || data.isAccount) {
       unsubscribeHeartbeat = subscribeToApiHeartbeat((connection) => {
         heartbeatConnection = connection;
-        if (data.isDashboard || data.isAccount) {
-          apiStatus = connection === 'connected'
-            ? 'online'
-            : connection === 'disconnected'
-              ? 'offline'
-              : 'checking';
-        }
+        apiStatus = connection === 'connected'
+          ? 'online'
+          : connection === 'disconnected'
+            ? 'offline'
+            : 'checking';
       });
     }
     if (data.isDashboard || data.isAccount) {
@@ -373,7 +397,7 @@
       }
     }
     void (async () => {
-      const authTask = restoreAuth()
+      const authTask = (data.hasAuthSession ? restoreAuth() : Promise.resolve(null))
         .then((session) => {
           authSession = session;
           authError = '';
@@ -467,9 +491,9 @@
 
       await authTask;
 
-      if (!data.isDashboard && !data.isAccount && !isLisnnto && !isNote) {
+      if (!data.isDashboard && !data.isAccount && !projectSlug) {
         unsubscribeProjects = subscribeToProjectUpdates(() => {
-          void refreshProjects();
+          void refreshProjects(true);
         });
       }
     })();
@@ -1984,7 +2008,7 @@
         <p class="lede">Small software experiments, shipped carefully. A living index of what’s on our workbench.</p>
       </section>
 
-      <section class="health-section" aria-labelledby="health-heading">
+      <section class="health-section" aria-labelledby="health-heading" use:loadHeartbeatWhenVisible>
         <div class="section-heading">
           <h2 id="health-heading">API heartbeat</h2>
         </div>
@@ -2171,7 +2195,7 @@
         {#if loading}
           <div class="state-panel" aria-live="polite"><span class="loader" aria-hidden="true"></span><span>Loading the index…</span></div>
         {:else if projectError}
-          <div class="state-panel error-panel" role="alert"><strong>The index is taking a break.</strong><span>{projectError}</span><button class="text-button" onclick={refreshProjects}>Try again <span aria-hidden="true">↗</span></button></div>
+          <div class="state-panel error-panel" role="alert"><strong>The index is taking a break.</strong><span>{projectError}</span><button class="text-button" onclick={() => void refreshProjects(true)}>Try again <span aria-hidden="true">↗</span></button></div>
         {:else if projects.length}
           <div class="project-list">
             {#each projects as project, index}
