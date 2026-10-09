@@ -32,14 +32,13 @@ once per second, and the page reconnects if the connection is lost. While
 disconnected, the graph shows an animated red flatline and reports that there
 is no heartbeat.
 
-Public page data is loaded during server rendering and kept in a per-process
-cache for 60 seconds; expired entries are served immediately while a background
-refresh runs. The browser uses that result instead of immediately requesting
-the same data again. The account and dashboard pages skip unrelated
-public data requests, and project-update events refresh only the project list.
-The rendered page is also cached at the
-Vercel edge for 60 seconds, with stale responses allowed during revalidation
-for up to 24 hours. The process cache itself is lost on server restart.
+The page shell renders without waiting for public API calls. The browser loads
+release details and builds after the page appears; the project index and
+infrastructure metrics wait until their sections are near the viewport. The
+account and dashboard pages skip unrelated public data requests, and
+project-update events refresh only the project list. The rendered page is
+cached at the Vercel edge for 60 seconds, with stale responses allowed during
+revalidation for up to 24 hours.
 
 The header also supports Google login through the same OAuth flow as the
 Obsidian plugin (`/auth/v0/login`). The website receives the OAuth callback on

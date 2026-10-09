@@ -313,6 +313,19 @@ export async function getLatestPluginBuild(): Promise<PluginBuild> {
   }
 }
 
+export async function getProjectLatestBuild(slug: string): Promise<LatestBuild | null> {
+  try {
+    const latest = await fetchJson<LatestBuild>(
+      `/updates/v0/${encodeURIComponent(slug)}/latest`
+    );
+    return { ...latest, assets: latest.assets ?? [] };
+  } catch (cause) {
+    const status = cause instanceof Error ? (cause as Error & { status?: number }).status : undefined;
+    if (status === 404) return null;
+    throw cause;
+  }
+}
+
 export function getPluginZipAsset(build: PluginBuild): ApiAsset | undefined {
   const asset = build.assets.find((candidate) => candidate.name.toLowerCase().endsWith('.zip'));
   if (!asset) return undefined;

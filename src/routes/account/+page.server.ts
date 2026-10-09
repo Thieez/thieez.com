@@ -19,5 +19,5 @@ export const load: PageServerLoad = async ({ cookies, fetch, setHeaders, url }) 
   ) {
     await getAccessToken(cookies, url, fetch);
   }
-  return loadPageData(fetch, setHeaders, url);
+  return loadPageData(setHeaders, url);
 };

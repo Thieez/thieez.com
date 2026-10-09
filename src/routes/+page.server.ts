@@ -28,5 +28,5 @@ export const load: PageServerLoad = async ({ cookies, fetch, setHeaders, url }) 
       redirect(303, deniedUrl.href);
     }
   }
-  return loadPageData(fetch, setHeaders, url);
+  return loadPageData(setHeaders, url);
 };

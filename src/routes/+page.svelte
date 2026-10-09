@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
-  import { getApkAsset, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjects, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
+  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjectLatestBuild, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
   import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getAlphaAccessStatus, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AlphaAccessStatus, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
@@ -14,15 +14,39 @@
     devices: AdminDevice[] | null;
   };
 
+  type ProjectReleaseStatus = 'released' | 'unreleased' | 'unpublished' | 'unavailable' | null;
+  type CachedResult<T> = {
+    value: T | null;
+    stale: boolean;
+    updatedAt: string | null;
+    error: string | null;
+  };
+
   let isLisnnto = data.isLisnnto;
   let isNote = data.isNote;
   let projectSlug = data.projectSlug;
   let projectName = data.projectName;
+  let projectReleaseStatus: ProjectReleaseStatus = data.projectReleaseStatus;
+  let projectRelease: CachedResult<LatestBuild> | null = data.projectRelease;
+  let currentProject = data.project;
+  let projectReleaseLoading =
+    data.isProjectHost &&
+    !data.isLisnnto &&
+    !data.isNote &&
+    !data.isAccount &&
+    !data.isDashboard &&
+    !data.accessDenied &&
+    !data.accessCheckFailed &&
+    (!data.projectReleaseStatus ||
+      (data.projectReleaseStatus === 'released' && !data.projectRelease?.value));
+  let projectReleaseStarted = false;
   let accessDenied = data.accessDenied;
   let accessCheckFailed = data.accessCheckFailed;
   let projects: Project[] = data.projects?.value?.projects ?? [];
   let build: LatestBuild | null = data.build?.value ?? null;
-  let loading = false;
+  let loading =
+    (!data.build?.value && (data.isLisnnto || data.isNote)) ||
+    (!data.projects?.value && !data.isAccount && !data.isDashboard && !data.projectSlug);
   let projectRefresh: Promise<void> | null = null;
   let error = data.build?.value ? '' : data.build?.error ?? '';
   let projectError = data.projects?.value ? '' : data.projects?.error ?? '';
@@ -134,7 +158,7 @@
 
   const load = async () => {
     detectExperience();
-    if ((!isLisnnto && !isNote) || loading) return;
+    if (!isLisnnto && !isNote) return;
     if (accessDenied || accessCheckFailed) {
       loading = false;
       return;
@@ -197,6 +221,115 @@
     staleDataResources = resources;
   };
 
+  const loadHostedProjectRelease = async () => {
+    if (
+      !projectSlug ||
+      (projectReleaseStatus !== null &&
+        !(projectReleaseStatus === 'released' && !projectRelease?.value)) ||
+      projectReleaseStarted ||
+      accessDenied ||
+      accessCheckFailed
+    ) return;
+    projectReleaseStarted = true;
+    projectReleaseLoading = true;
+    try {
+      const release = await getProjectLatestBuild(projectSlug);
+      projectRelease = {
+        value: release,
+        stale: false,
+        updatedAt: new Date().toISOString(),
+        error: null
+      };
+      projectReleaseStatus = release ? 'released' : 'unreleased';
+    } catch (cause) {
+      projectRelease = {
+        value: null,
+        stale: false,
+        updatedAt: null,
+        error: cause instanceof Error ? cause.message : 'The release could not be loaded.'
+      };
+      projectReleaseStatus = 'unavailable';
+    } finally {
+      projectReleaseLoading = false;
+    }
+  };
+
+  const loadStorageWhenVisible = (node: HTMLElement) => {
+    if (storage) return;
+    const loadStorage = () => {
+      storageLoading = true;
+      void getDatabaseStorage()
+        .then((result) => {
+          storage = result;
+          storageError = '';
+        })
+        .catch((cause) => {
+          storageError = cause instanceof Error ? cause.message : 'Storage status is unavailable.';
+        })
+        .finally(() => {
+          storageLoading = false;
+        });
+    };
+    if (typeof IntersectionObserver === 'undefined') {
+      loadStorage();
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        loadStorage();
+      }
+    }, { rootMargin: '200px' });
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  };
+
+  const loadProjectsWhenVisible = (node: HTMLElement) => {
+    if (hasProjectsData) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      void refreshProjects();
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        void refreshProjects();
+      }
+    }, { rootMargin: '300px' });
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  };
+
+  const loadRenderLimitsWhenVisible = (node: HTMLElement) => {
+    if (renderLimits) return;
+    const loadLimits = () => {
+      renderLimitsLoading = true;
+      void getRenderLimits()
+        .then((result) => {
+          renderLimits = result;
+          renderLimitsError = '';
+        })
+        .catch((cause) => {
+          renderLimitsError = cause instanceof Error ? cause.message : 'Render plan is unavailable.';
+        })
+        .finally(() => {
+          renderLimitsLoading = false;
+        });
+    };
+    if (typeof IntersectionObserver === 'undefined') {
+      loadLimits();
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        loadLimits();
+      }
+    }, { rootMargin: '200px' });
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
+  };
+
   onMount(() => {
     document.addEventListener('click', closeMenus);
     document.addEventListener('keydown', handleDocumentKeydown);
@@ -221,6 +354,23 @@
               : 'checking';
         }
       });
+    }
+    if (data.isDashboard || data.isAccount) {
+      loading = false;
+    } else if (isLisnnto || isNote) {
+      if (!build) void load();
+    } else if (
+      data.isProjectHost &&
+      projectSlug &&
+      !accessDenied &&
+      !accessCheckFailed
+    ) {
+      if (
+        !projectReleaseStatus ||
+        (projectReleaseStatus === 'released' && !projectRelease?.value)
+      ) {
+        void loadHostedProjectRelease();
+      }
     }
     void (async () => {
       const authTask = restoreAuth()
@@ -997,13 +1147,13 @@
 
 <svelte:head>
   <title>
-    {data.projectReleaseStatus === 'released' && !isLisnnto && !isNote
+    {projectReleaseStatus === 'released' && !isLisnnto && !isNote
       ? `${projectName} — Latest release`
-      : data.projectReleaseStatus === 'unreleased'
+      : projectReleaseStatus === 'unreleased'
       ? `${projectName} — Not released yet`
-      : data.projectReleaseStatus === 'unpublished'
+      : projectReleaseStatus === 'unpublished'
         ? `${projectName} — Not published`
-      : data.projectReleaseStatus === 'unavailable'
+      : projectReleaseStatus === 'unavailable'
         ? `${projectName} — Release status unavailable`
         : data.isAccount
           ? 'Account — Thieez'
@@ -1125,7 +1275,13 @@
         {/if}
         <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
       </section>
-    {:else if data.projectReleaseStatus === 'unpublished'}
+    {:else if projectReleaseLoading}
+      <section class="account-view" aria-live="polite">
+        <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
+        <h1>{projectName}<br /><em>One moment.</em></h1>
+        <div class="state-panel"><span class="loader" aria-hidden="true"></span><span>Loading release details…</span></div>
+      </section>
+    {:else if projectReleaseStatus === 'unpublished'}
       <section class="account-view" aria-labelledby="project-unpublished-heading">
         <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
         <h1 id="project-unpublished-heading">Not published <em>yet.</em></h1>
@@ -1707,43 +1863,43 @@
           {/if}
         {/if}
       </section>
-    {:else if data.projectReleaseStatus === 'unreleased'}
+    {:else if projectReleaseStatus === 'unreleased'}
       <section class="account-view" aria-labelledby="project-unreleased-heading">
         <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
         <h1 id="project-unreleased-heading">Not released <em>yet.</em></h1>
         <p class="lede">This project is published on Thieez, but it hasn’t been released yet. Check back soon.</p>
         <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
       </section>
-    {:else if data.projectReleaseStatus === 'unavailable'}
+    {:else if projectReleaseStatus === 'unavailable'}
       <section class="account-view" aria-labelledby="project-release-check-heading">
         <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
         <h1 id="project-release-check-heading">Release check <em>unavailable.</em></h1>
         <p class="lede">We couldn’t check whether this project has been released. Please try again shortly.</p>
         <button class="text-button" onclick={() => window.location.reload()}>Try again <span aria-hidden="true">↗</span></button>
       </section>
-    {:else if data.projectReleaseStatus === 'released' && !isLisnnto && !isNote}
+    {:else if projectReleaseStatus === 'released' && !isLisnnto && !isNote}
       <section class="hero download-hero" aria-labelledby="project-release-heading">
         <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
         <h1 id="project-release-heading">{projectName}<br /><em>Latest release.</em></h1>
-        <p class="lede">{data.project?.description || 'Download the latest release of this project.'}</p>
+        <p class="lede">{currentProject?.description || 'Download the latest release of this project.'}</p>
 
-        {#if data.projectRelease?.error &&
-        !data.projectRelease.value &&
-        !data.projectRelease.error.includes('(404)')}
+        {#if projectRelease?.error &&
+        !projectRelease.value &&
+        !projectRelease.error.includes('(404)')}
           <div class="state-panel error-panel" role="alert">
             <strong>Couldn’t load the release.</strong>
-            <span>{data.projectRelease.error}</span>
+            <span>{projectRelease.error}</span>
             <button class="text-button" onclick={() => window.location.reload()}>Try again <span aria-hidden="true">↗</span></button>
           </div>
-        {:else if data.projectRelease?.value}
-          {@const assets = data.projectRelease.value.assets.filter(
+        {:else if projectRelease?.value}
+          {@const assets = projectRelease.value.assets.filter(
             (asset) => asset.download_url || asset.browser_download_url
           )}
           <div class="release-card">
             <div class="release-topline">
               <span class="release-label">LATEST RELEASE</span>
               <span class="release-rule"></span>
-              <span class="release-date">{data.projectRelease.value.tag_name || 'Latest'}</span>
+              <span class="release-date">{projectRelease.value.tag_name || 'Latest'}</span>
             </div>
             {#if assets.length}
               <div class="project-release-assets">
@@ -1937,7 +2093,7 @@
         </div>
       </section>
       <div class="infrastructure-grid">
-        <section class="storage-section" aria-labelledby="storage-heading">
+        <section class="storage-section" aria-labelledby="storage-heading" use:loadStorageWhenVisible>
           <div class="section-heading">
             <h2 id="storage-heading">Database storage</h2>
           </div>
@@ -1960,7 +2116,7 @@
           {/if}
         </section>
 
-        <section class="render-section" aria-labelledby="render-heading">
+        <section class="render-section" aria-labelledby="render-heading" use:loadRenderLimitsWhenVisible>
           <div class="section-heading">
             <h2 id="render-heading">API hosting</h2>
           </div>
@@ -2007,7 +2163,7 @@
         </section>
       </div>
 
-      <section class="project-section" aria-labelledby="projects-heading">
+      <section class="project-section" aria-labelledby="projects-heading" use:loadProjectsWhenVisible>
         <div class="section-heading">
           <h2 id="projects-heading">Selected work</h2>
           <span>{projects.length.toString().padStart(2, '0')} projects</span>
