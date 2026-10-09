@@ -225,6 +225,7 @@
       const authTask = restoreAuth()
         .then((session) => {
           authSession = session;
+          if (accessDenied && session) void loadAlphaAccess();
           if (data.isAccount && session) void loadAccountDetails();
           if (data.isDashboard) {
             if (session) {
@@ -289,6 +290,11 @@
         })
         .catch((cause) => {
           authSession = null;
+          if (accessDenied) {
+            alphaAccessError = cause instanceof Error
+              ? cause.message
+              : 'Could not verify your Alpha access.';
+          }
           if (data.isDashboard) {
             dashboardAuthError = cause instanceof Error
               ? cause.message
@@ -1058,9 +1064,36 @@
       <section class="account-view" aria-labelledby="access-denied-heading">
         <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
         <h1 id="access-denied-heading">No access <em>yet.</em></h1>
-        <p class="lede">Your account hasn’t been granted access to {projectName}.</p>
-        {#if isLisnnto || isNote}
-          <a class="text-button" href={`/projects/${encodeURIComponent(projectSlug)}`}>Check access again <span aria-hidden="true">↗</span></a>
+        {#if authLoading || (authSession && alphaAccessLoading)}
+          <div class="state-panel" aria-live="polite">
+            <span class="loader" aria-hidden="true"></span>
+            <span>Checking Alpha access…</span>
+          </div>
+        {:else if alphaAccessError}
+          <div class="state-panel error-panel" role="alert">
+            <strong>Couldn’t check Alpha access.</strong>
+            <span>{alphaAccessError}</span>
+            <button class="text-button" onclick={() => window.location.reload()}>Try again</button>
+          </div>
+        {:else if authSession && alphaAccess?.status === 'pending'}
+          <p class="lede">Your Alpha access request is pending administrator approval.</p>
+          <div class="alpha-status" role="status">
+            <span class="alpha-status-dot"></span>
+            Request pending
+            <span>We’ll email you when Alpha access is approved.</span>
+          </div>
+        {:else if authSession && alphaAccess?.has_access}
+          <p class="lede">Your account has Alpha access, but access to {projectName} is not enabled.</p>
+          <a class="text-button" href="https://thieez.com/account">Check your project access <span aria-hidden="true">↗</span></a>
+        {:else}
+          <p class="lede">
+            {authSession
+              ? `Your account doesn’t have Alpha access to ${projectName} yet. Request Alpha access to continue.`
+              : `Sign in and request Alpha access to use ${projectName}.`}
+          </p>
+          <a class="alpha-button alpha-link-button" href="https://thieez.com/alpha">
+            Request Alpha access <span aria-hidden="true">↗</span>
+          </a>
         {/if}
         <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
       </section>

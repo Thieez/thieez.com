@@ -66,7 +66,16 @@ export async function loadPageData(
 ) {
   const isDashboard = url.pathname === '/dashboard';
   const isAccount = url.pathname === '/account';
-  const accessDenied = url.searchParams.has('access_denied');
+  const hostname = url.hostname.toLowerCase();
+  const hostProject = hostname.endsWith('.thieez.com')
+    ? hostname.slice(0, -'.thieez.com'.length)
+    : '';
+  const accessDenied =
+    url.searchParams.has('access_denied') ||
+    (url.searchParams.get('session_transfer') === 'failed' &&
+      hostProject !== '' &&
+      hostProject !== 'www' &&
+      hostProject !== 'api');
   const accessCheckFailed = url.searchParams.has('access_check_failed');
   setHeaders(
     isDashboard || isAccount || accessDenied || accessCheckFailed
@@ -77,9 +86,6 @@ export async function loadPageData(
         }
   );
 
-  const hostProject = url.hostname.toLowerCase().endsWith('.thieez.com')
-    ? url.hostname.slice(0, -'.thieez.com'.length)
-    : '';
   const configuredProject = url.searchParams.get('project')?.trim().toLowerCase() || '';
   const projectSlug = configuredProject || (hostProject !== 'www' && hostProject !== 'api' ? hostProject : '');
   const isLisnnto = projectSlug === 'lisnnto';
