@@ -264,6 +264,7 @@ h1 em{font-style:normal;color:#8d8a82}
 .release-rule{height:1px;background:var(--line);flex:1}
 .release-date{color:var(--muted)}
 .release-details{display:flex;justify-content:space-between;align-items:end;gap:24px;padding-top:34px}
+.project-release-assets{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding-top:30px}
 .version{font-size:38px;letter-spacing:-.06em;margin:0}
 .asset-name{font-size:11px;color:var(--muted);margin:8px 0 0}
 .download-button{background:var(--lime);border:1px solid var(--ink);padding:17px 20px;font-weight:700;text-decoration:none;display:inline-flex;gap:24px;align-items:center;transition:transform .2s ease,box-shadow .2s ease}

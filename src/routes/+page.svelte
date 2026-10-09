@@ -992,7 +992,9 @@
 
 <svelte:head>
   <title>
-    {data.projectReleaseStatus === 'unreleased'
+    {data.projectReleaseStatus === 'released' && !isLisnnto && !isNote
+      ? `${projectName} — Latest release`
+      : data.projectReleaseStatus === 'unreleased'
       ? `${projectName} — Not released yet`
       : data.projectReleaseStatus === 'unpublished'
         ? `${projectName} — Not published`
@@ -1706,6 +1708,61 @@
         <h1 id="project-release-check-heading">Release check <em>unavailable.</em></h1>
         <p class="lede">We couldn’t check whether this project has been released. Please try again shortly.</p>
         <button class="text-button" onclick={() => window.location.reload()}>Try again <span aria-hidden="true">↗</span></button>
+      </section>
+    {:else if data.projectReleaseStatus === 'released' && !isLisnnto && !isNote}
+      <section class="hero download-hero" aria-labelledby="project-release-heading">
+        <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
+        <h1 id="project-release-heading">{projectName}<br /><em>Latest release.</em></h1>
+        <p class="lede">{data.project?.description || 'Download the latest release of this project.'}</p>
+
+        {#if data.projectRelease?.error &&
+        !data.projectRelease.value &&
+        !data.projectRelease.error.includes('(404)')}
+          <div class="state-panel error-panel" role="alert">
+            <strong>Couldn’t load the release.</strong>
+            <span>{data.projectRelease.error}</span>
+            <button class="text-button" onclick={() => window.location.reload()}>Try again <span aria-hidden="true">↗</span></button>
+          </div>
+        {:else if data.projectRelease?.value}
+          {@const assets = data.projectRelease.value.assets.filter(
+            (asset) => asset.download_url || asset.browser_download_url
+          )}
+          <div class="release-card">
+            <div class="release-topline">
+              <span class="release-label">LATEST RELEASE</span>
+              <span class="release-rule"></span>
+              <span class="release-date">{data.projectRelease.value.tag_name || 'Latest'}</span>
+            </div>
+            {#if assets.length}
+              <div class="project-release-assets">
+                {#each assets as asset (asset.name)}
+                  <a
+                    class="download-button"
+                    href={asset.download_url
+                      ? new URL(asset.download_url, `${API_BASE}/`).href
+                      : asset.browser_download_url}
+                    download
+                  >
+                    {asset.name} <span aria-hidden="true">↓</span>
+                  </a>
+                {/each}
+              </div>
+            {:else}
+              <div class="state-panel">
+                <strong>Release published, no downloadable files yet.</strong>
+                <span>Check back soon for project assets.</span>
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <div class="state-panel">
+            <strong>No stable release is available yet.</strong>
+            <span>This project is enabled for releases, but no downloadable stable release was found.</span>
+          </div>
+        {/if}
+      </section>
+      <section class="aside-note">
+        <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
       </section>
     {:else if isLisnnto || isNote}
       <section class="hero download-hero" aria-labelledby="download-heading">

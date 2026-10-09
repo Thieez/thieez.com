@@ -101,6 +101,8 @@ export async function loadPageData(
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
   let projectReleaseStatus: ProjectReleaseStatus = null;
+  let projectRelease: CachedResult<LatestBuild> | null = null;
+  let publishedProject: Project | null = null;
 
   if (
     hostProject &&
@@ -112,27 +114,43 @@ export async function loadPageData(
     !accessCheckFailed
   ) {
     const projectIndex = await loadProjects(fetcher);
-    const publishedProject = projectIndex.value?.projects.find(
+    publishedProject = projectIndex.value?.projects.find(
       (project) => project.slug.toLowerCase() === hostProject
-    );
+    ) ?? null;
     if (publishedProject) {
+      const releaseSlug = publishedProject.slug;
       if (typeof publishedProject.released === 'boolean') {
         projectReleaseStatus = publishedProject.released ? 'released' : 'unreleased';
-      } else {
-        try {
-          await fetchJson<LatestBuild>(
-            fetcher,
-            `/updates/v0/${encodeURIComponent(publishedProject.slug)}/latest`
+        if (publishedProject.released) {
+          projectRelease = await cached<LatestBuild>(
+            `release:${releaseSlug}`,
+            async () => {
+              const release = await fetchJson<LatestBuild>(
+                fetcher,
+                `/updates/v0/${encodeURIComponent(releaseSlug)}/latest`
+              );
+              return { ...release, assets: release.assets ?? [] };
+            }
           );
-          projectReleaseStatus = 'released';
-        } catch (cause) {
-          const status = cause instanceof Error ? Number(cause.message.match(/\d+/)?.[0]) : undefined;
-          if (status === 404) {
-            projectReleaseStatus = 'unreleased';
-          } else {
-            console.error('Could not check project release status', cause);
-            projectReleaseStatus = 'unavailable';
+        }
+      } else {
+        projectRelease = await cached<LatestBuild>(
+          `release:${releaseSlug}`,
+          async () => {
+            const release = await fetchJson<LatestBuild>(
+              fetcher,
+              `/updates/v0/${encodeURIComponent(releaseSlug)}/latest`
+            );
+            return { ...release, assets: release.assets ?? [] };
           }
+        );
+        if (projectRelease.value) {
+          projectReleaseStatus = 'released';
+        } else if (projectRelease.error?.includes('(404)')) {
+          projectReleaseStatus = 'unreleased';
+        } else {
+          console.error('Could not check project release status', projectRelease.error);
+          projectReleaseStatus = 'unavailable';
         }
       }
     } else if (projectIndex.error) {
@@ -150,7 +168,8 @@ export async function loadPageData(
       accessCheckFailed ||
       projectReleaseStatus === 'unreleased' ||
       projectReleaseStatus === 'unpublished' ||
-      projectReleaseStatus === 'unavailable'
+      projectReleaseStatus === 'unavailable' ||
+      Boolean(projectRelease?.error)
       ? { 'cache-control': 'no-store' }
       : {
           'cache-control':
@@ -172,7 +191,9 @@ export async function loadPageData(
       accessCheckFailed,
       isDashboard,
       isAccount,
-      projectReleaseStatus
+      projectReleaseStatus,
+      project: publishedProject,
+      projectRelease
     };
   }
 
@@ -190,7 +211,9 @@ export async function loadPageData(
       accessCheckFailed,
       isDashboard,
       isAccount,
-      projectReleaseStatus
+      projectReleaseStatus,
+      project: publishedProject,
+      projectRelease
     };
   }
 
@@ -231,7 +254,9 @@ export async function loadPageData(
       accessCheckFailed,
       isDashboard,
       isAccount,
-      projectReleaseStatus
+      projectReleaseStatus,
+      project: publishedProject,
+      projectRelease
     };
   }
 
@@ -262,6 +287,8 @@ export async function loadPageData(
     accessCheckFailed,
     isDashboard,
     isAccount,
-    projectReleaseStatus
+    projectReleaseStatus,
+    project: publishedProject,
+    projectRelease
   };
 }
