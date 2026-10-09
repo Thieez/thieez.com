@@ -86,8 +86,15 @@ export type UserApiKey = {
 };
 
 let cachedAuthSession: { session: AuthSession | null; expiresAt: number } | null = null;
+let lastKnownAuthSession: AuthSession | null = null;
 let restoreAuthRequest: Promise<AuthSession | null> | null = null;
 let restoreAuthVersion = 0;
+
+export function getLastKnownAuthSession(): AuthSession | null {
+  return lastKnownAuthSession
+    ? { user: lastKnownAuthSession.user ? { ...lastKnownAuthSession.user } : null }
+    : null;
+}
 
 async function request(path: string, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
@@ -141,6 +148,7 @@ export async function restoreAuth(forceRefresh = false): Promise<AuthSession | n
       : null;
     if (version === restoreAuthVersion) {
       cachedAuthSession = { session, expiresAt: Date.now() + AUTH_SESSION_CACHE_TTL_MS };
+      lastKnownAuthSession = session;
     }
     return session;
   })();
@@ -170,6 +178,7 @@ export async function submitAlphaAccessRequest(): Promise<AlphaAccessStatus> {
 
 export async function logout(): Promise<void> {
   cachedAuthSession = null;
+  lastKnownAuthSession = null;
   restoreAuthVersion += 1;
   const response = await request('/auth/logout', { method: 'POST' });
   if (!response.ok) throw new Error(`Could not log out (${response.status})`);

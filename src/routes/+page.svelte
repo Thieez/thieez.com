@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjectLatestBuild, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getAlphaAccessStatus, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AlphaAccessStatus, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
+  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getAlphaAccessStatus, getLastKnownAuthSession, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AlphaAccessStatus, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -69,6 +69,7 @@
   );
   let hasProjectsData = data.projects?.value !== null && data.projects?.value !== undefined;
   let authSession: AuthSession | null = null;
+  let cachedAuthSession: AuthSession | null = data.hasAuthSession ? getLastKnownAuthSession() : null;
   let authLoading = true;
   let authError = '';
   let dashboardAuthError = '';
@@ -400,6 +401,7 @@
       const authTask = (data.hasAuthSession ? restoreAuth() : Promise.resolve(null))
         .then((session) => {
           authSession = session;
+          cachedAuthSession = session;
           authError = '';
           if (accessDenied && session) void loadAlphaAccess();
           if (data.isAccount && session) void loadAccountDetails();
@@ -444,6 +446,7 @@
               void restoreAuth(true)
                 .then((updatedSession) => {
                   authSession = updatedSession;
+                  cachedAuthSession = updatedSession;
                   if (!updatedSession && authRefreshTimer !== undefined) {
                     window.clearInterval(authRefreshTimer);
                     authRefreshTimer = undefined;
@@ -466,6 +469,7 @@
         })
         .catch((cause) => {
           authSession = null;
+          cachedAuthSession = null;
           authError = cause instanceof Error
             ? cause.message
             : 'Could not verify your session.';
@@ -517,6 +521,7 @@
       await logout();
     } finally {
       authSession = null;
+      cachedAuthSession = null;
       limits = null;
       limitsError = '';
       projectAccess = null;
@@ -1072,7 +1077,7 @@
 
   $: userLabel = authSession?.user?.name || authSession?.user?.email || 'Account';
   $: userInitial = userLabel.trim().charAt(0).toUpperCase() || 'A';
-  $: avatarUrl = authSession?.user?.avatar_url;
+  $: avatarUrl = authSession?.user?.avatar_url ?? cachedAuthSession?.user?.avatar_url;
 
   $: apk = build ? getApkAsset(build) : undefined;
   $: pluginZip = build && isNote ? getPluginZipAsset(build) : undefined;
@@ -1204,7 +1209,23 @@
         ></span><span>Thieez</span>
     </a>
     <div class="header-meta">
-      {#if !authLoading}
+      {#if authLoading && cachedAuthSession}
+        <button
+          class="profile-button"
+          type="button"
+          disabled
+          aria-label="Restoring account session"
+          aria-busy="true"
+        >
+          {#if avatarUrl}
+            <img src={avatarUrl} alt="" class="profile-avatar" />
+          {:else}
+            <span class="profile-avatar profile-avatar-fallback" aria-hidden="true">
+              {(cachedAuthSession.user?.name || cachedAuthSession.user?.email || 'Account').trim().charAt(0).toUpperCase() || 'A'}
+            </span>
+          {/if}
+        </button>
+      {:else if !authLoading}
         {#if authSession}
           <div class="profile-menu">
             <button
