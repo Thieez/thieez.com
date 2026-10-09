@@ -11,11 +11,18 @@ const COOKIE_SCOPE_COOKIE = 'thieez_cookie_scope';
 const SESSION_INACTIVITY_DAYS = 30;
 const SESSION_INACTIVITY_SECONDS = SESSION_INACTIVITY_DAYS * 24 * 60 * 60;
 const REFRESH_REQUEST_REUSE_MS = 30_000;
+const PROFILE_CACHE_TTL_MS = 60_000;
+const PROFILE_CACHE_MAX_ENTRIES = 500;
 
 type RefreshedTokens = {
   access_token: string;
   refresh_token: string;
   expires_in: number;
+};
+
+type CachedProfile = {
+  user: AuthUser;
+  expiresAt: number;
 };
 
 type RefreshRequest = {
@@ -25,6 +32,23 @@ type RefreshRequest = {
 };
 
 const refreshRequests = new Map<string, RefreshRequest>();
+const profileCache = new Map<string, CachedProfile>();
+
+async function profileCacheKey(accessToken: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(accessToken));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function pruneProfileCache(now: number): void {
+  for (const [key, profile] of profileCache) {
+    if (profile.expiresAt <= now) profileCache.delete(key);
+  }
+  while (profileCache.size > PROFILE_CACHE_MAX_ENTRIES) {
+    const oldestKey = profileCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    profileCache.delete(oldestKey);
+  }
+}
 
 export class AuthApiError extends Error {
   constructor(
@@ -311,10 +335,19 @@ export async function retryTransientRequest(
 export async function getCurrentUser(
   cookies: Cookies,
   url: URL,
-  fetcher: typeof fetch
+  fetcher: typeof fetch,
+  forceProfileRefresh = false
 ): Promise<{ accessToken: string; user: AuthUser } | null> {
   let accessToken = await getAccessToken(cookies, url, fetcher);
   if (!accessToken) return null;
+
+  const cacheKey = await profileCacheKey(accessToken);
+  const now = Date.now();
+  pruneProfileCache(now);
+  const cachedProfile = profileCache.get(cacheKey);
+  if (!forceProfileRefresh && cachedProfile && cachedProfile.expiresAt > now) {
+    return { accessToken, user: { ...cachedProfile.user } };
+  }
 
   const deviceId = cookies.get(DEVICE_COOKIE);
   let response = await fetcher(`${AUTH_BASE}/me?include_stats=false`, {
@@ -360,8 +393,15 @@ export async function getCurrentUser(
   const payload = (await response.json()) as { user?: AuthUser; is_admin?: boolean };
   if (!payload.user) throw new Error('Auth API returned no user profile');
 
+  const user = { ...payload.user, is_admin: payload.is_admin === true };
+  profileCache.set(await profileCacheKey(accessToken), {
+    user,
+    expiresAt: Date.now() + PROFILE_CACHE_TTL_MS
+  });
+  pruneProfileCache(Date.now());
+
   return {
     accessToken,
-    user: { ...payload.user, is_admin: payload.is_admin === true }
+    user
   };
 }

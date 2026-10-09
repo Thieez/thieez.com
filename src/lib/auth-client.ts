@@ -1,6 +1,7 @@
 import type { AuthUser } from '$lib/api';
 
 const REQUEST_TIMEOUT_MS = 15_000;
+const AUTH_SESSION_CACHE_TTL_MS = 60_000;
 
 export type AuthSession = {
   user: AuthUser | null;
@@ -84,6 +85,10 @@ export type UserApiKey = {
   last_used_at: string | null;
 };
 
+let cachedAuthSession: { session: AuthSession | null; expiresAt: number } | null = null;
+let restoreAuthRequest: Promise<AuthSession | null> | null = null;
+let restoreAuthVersion = 0;
+
 async function request(path: string, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -102,23 +107,49 @@ export function startLogin(): void {
 }
 
 /** Loads the profile through the server, where the HttpOnly tokens are held. */
-export async function restoreAuth(): Promise<AuthSession | null> {
+export async function restoreAuth(forceRefresh = false): Promise<AuthSession | null> {
   if (typeof window === 'undefined') return null;
 
-  const response = await request('/auth/session', {
-    headers: { Accept: 'application/json' }
-  });
-  const payload = (await response.json()) as {
-    user?: AuthUser | null;
-    is_admin?: boolean;
-    error?: string;
-  };
-  if (!response.ok) {
-    throw new Error(payload.error || `Could not restore session (${response.status})`);
+  const now = Date.now();
+  if (!forceRefresh && cachedAuthSession && cachedAuthSession.expiresAt > now) {
+    return cachedAuthSession.session
+      ? { user: { ...cachedAuthSession.session.user } }
+      : null;
   }
-  return payload.user
-    ? { user: { ...payload.user, is_admin: payload.is_admin === true } }
-    : null;
+  if (!forceRefresh && restoreAuthRequest) return restoreAuthRequest;
+
+  if (forceRefresh) {
+    cachedAuthSession = null;
+    restoreAuthVersion += 1;
+  }
+  const version = restoreAuthVersion;
+  const refreshQuery = forceRefresh ? '?refresh=true' : '';
+  const restoreRequest = (async () => {
+    const response = await request(`/auth/session${refreshQuery}`, {
+      headers: { Accept: 'application/json' }
+    });
+    const payload = (await response.json()) as {
+      user?: AuthUser | null;
+      is_admin?: boolean;
+      error?: string;
+    };
+    if (!response.ok) {
+      throw new Error(payload.error || `Could not restore session (${response.status})`);
+    }
+    const session = payload.user
+      ? { user: { ...payload.user, is_admin: payload.is_admin === true } }
+      : null;
+    if (version === restoreAuthVersion) {
+      cachedAuthSession = { session, expiresAt: Date.now() + AUTH_SESSION_CACHE_TTL_MS };
+    }
+    return session;
+  })();
+  restoreAuthRequest = restoreRequest;
+  try {
+    return await restoreRequest;
+  } finally {
+    if (restoreAuthRequest === restoreRequest) restoreAuthRequest = null;
+  }
 }
 
 export async function getAlphaAccessStatus(): Promise<AlphaAccessStatus> {
@@ -138,6 +169,8 @@ export async function submitAlphaAccessRequest(): Promise<AlphaAccessStatus> {
 }
 
 export async function logout(): Promise<void> {
+  cachedAuthSession = null;
+  restoreAuthVersion += 1;
   const response = await request('/auth/logout', { method: 'POST' });
   if (!response.ok) throw new Error(`Could not log out (${response.status})`);
 }

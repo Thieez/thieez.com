@@ -3,7 +3,12 @@ import { AuthApiError, clearAuthCookies, getCurrentUser } from '$lib/server/auth
 
 export const GET: RequestHandler = async ({ cookies, fetch, url }) => {
   try {
-    const session = await getCurrentUser(cookies, url, fetch);
+    const session = await getCurrentUser(
+      cookies,
+      url,
+      fetch,
+      url.searchParams.get('refresh') === 'true'
+    );
     return json(
       {
         user: session

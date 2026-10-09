@@ -441,7 +441,7 @@
             updatePresence();
             presenceHeartbeatTimer = window.setInterval(updatePresence, 20_000);
             authRefreshTimer = window.setInterval(() => {
-              void restoreAuth()
+              void restoreAuth(true)
                 .then((updatedSession) => {
                   authSession = updatedSession;
                   if (!updatedSession && authRefreshTimer !== undefined) {
@@ -1003,7 +1003,7 @@
       adminMessage = action === 'admin' ? 'Administrator permission removed.' : 'User removed from the list.';
       if (action === 'admin' && identifier === authSession?.user?.id) {
         try {
-          authSession = await restoreAuth();
+          authSession = await restoreAuth(true);
         } catch (cause) {
           adminError = cause instanceof Error ? cause.message : 'Could not refresh your administrator session.';
           return;
