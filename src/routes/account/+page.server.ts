@@ -1,8 +1,8 @@
-import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { loadPageData } from '$lib/server/home-load';
+import { getAccessToken } from '$lib/server/auth';
 
-export const load: PageServerLoad = ({ cookies, fetch, setHeaders, url }) => {
+export const load: PageServerLoad = async ({ cookies, fetch, setHeaders, url }) => {
   const hostname = url.hostname.toLowerCase();
   const projectHost = hostname.endsWith('.thieez.com')
     ? hostname.slice(0, -'.thieez.com'.length)
@@ -17,10 +17,7 @@ export const load: PageServerLoad = ({ cookies, fetch, setHeaders, url }) => {
       cookies.get('thieez_cookie_scope') !== 'shared'
     )
   ) {
-    setHeaders({ 'cache-control': 'no-store' });
-    const handoff = new URL('https://thieez.com/auth/share-session');
-    handoff.searchParams.set('return_to', url.href);
-    redirect(303, handoff.href);
+    await getAccessToken(cookies, url, fetch);
   }
   return loadPageData(fetch, setHeaders, url);
 };

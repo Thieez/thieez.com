@@ -35,6 +35,8 @@ export type Project = {
   name: string;
   description: string;
   href: string;
+  published?: boolean;
+  released?: boolean;
   status: string;
   meta: string;
 };

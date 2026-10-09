@@ -17,7 +17,13 @@ export type AdminAccessData = {
   whitelist_enabled: boolean;
   whitelist: AdminAccessEntry[];
   blacklist: AdminAccessEntry[];
-  apps: Array<{ slug: string; name: string; repository: string }>;
+  apps: Array<{
+    slug: string;
+    name: string;
+    repository: string;
+    published?: boolean;
+    released?: boolean;
+  }>;
   alpha_requests: Array<{
     user_id: string;
     email: string | null;
@@ -55,6 +61,8 @@ export type ProjectAccessStatus = {
     slug: string;
     name: string;
     href: string;
+    published?: boolean;
+    released?: boolean;
     allowed: boolean;
   }>;
 };

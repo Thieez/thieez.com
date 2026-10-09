@@ -1,20 +1,12 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { AUTH_BASE } from '$lib/api';
-import { fetchWithAuthRefresh, getCurrentUser } from '$lib/server/auth';
+import { fetchWithAuthRefresh } from '$lib/server/auth';
 
 const RETRY_DELAY_MS = 250;
 
 export const GET: RequestHandler = async ({ cookies, fetch, url }) => {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const session = await getCurrentUser(cookies, url, fetch);
-      if (!session) {
-        return json({ detail: 'Not authenticated' }, {
-          status: 401,
-          headers: { 'cache-control': 'no-store' }
-        });
-      }
-
       const response = await fetchWithAuthRefresh(
         cookies,
         url,
@@ -24,8 +16,7 @@ export const GET: RequestHandler = async ({ cookies, fetch, url }) => {
             Accept: 'application/json',
             Authorization: `Bearer ${accessToken}`
           }
-        }),
-        session.accessToken
+        })
       );
       if (!response) {
         return json({ detail: 'Not authenticated' }, {

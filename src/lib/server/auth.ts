@@ -10,10 +10,21 @@ const DEVICE_COOKIE = 'thieez_device_id';
 const COOKIE_SCOPE_COOKIE = 'thieez_cookie_scope';
 const SESSION_INACTIVITY_DAYS = 30;
 const SESSION_INACTIVITY_SECONDS = SESSION_INACTIVITY_DAYS * 24 * 60 * 60;
-const refreshRequests = new Map<
-  string,
-  Promise<{ access_token: string; refresh_token: string; expires_in: number } | null>
->();
+const REFRESH_REQUEST_REUSE_MS = 30_000;
+
+type RefreshedTokens = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+};
+
+type RefreshRequest = {
+  refreshToken: string;
+  promise: Promise<RefreshedTokens | null>;
+  completedAt: number | null;
+};
+
+const refreshRequests = new Map<string, RefreshRequest>();
 
 export class AuthApiError extends Error {
   constructor(
@@ -169,56 +180,82 @@ export async function getAccessToken(
     return null;
   }
 
+  for (const [pendingDeviceId, pendingRequest] of refreshRequests) {
+    if (
+      pendingRequest.completedAt !== null &&
+      Date.now() - pendingRequest.completedAt > REFRESH_REQUEST_REUSE_MS
+    ) {
+      refreshRequests.delete(pendingDeviceId);
+    }
+  }
+
   let refreshRequest = refreshRequests.get(deviceId);
+  if (
+    refreshRequest &&
+    (
+      refreshRequest.refreshToken !== refreshToken ||
+      (
+        refreshRequest.completedAt !== null &&
+        Date.now() - refreshRequest.completedAt > REFRESH_REQUEST_REUSE_MS
+      )
+    )
+  ) {
+    refreshRequests.delete(deviceId);
+    refreshRequest = undefined;
+  }
   if (!refreshRequest) {
-    refreshRequest = (async () => {
-      const response = await fetcher(`${AUTH_BASE}/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken, device_id: deviceId })
-      });
-      if (response.status === 401 || response.status === 403) return null;
-      if (!response.ok) {
-        throw new AuthApiError(
-          `Auth API refresh failed (${response.status})`,
-          response.status,
-          response.headers.get('Retry-After')
-        );
-      }
+    const request: RefreshRequest = {
+      refreshToken,
+      completedAt: null,
+      promise: (async () => {
+        const response = await fetcher(`${AUTH_BASE}/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken, device_id: deviceId })
+        });
+        if (response.status === 401 || response.status === 403) return null;
+        if (!response.ok) {
+          throw new AuthApiError(
+            `Auth API refresh failed (${response.status})`,
+            response.status,
+            response.headers.get('Retry-After')
+          );
+        }
 
-      const tokens = (await response.json()) as {
-        access_token?: string;
-        refresh_token?: string;
-        expires_in?: number;
-      };
-      if (
-        typeof tokens.access_token !== 'string' ||
-        !tokens.access_token ||
-        typeof tokens.refresh_token !== 'string' ||
-        !tokens.refresh_token ||
-        typeof tokens.expires_in !== 'number' ||
-        !Number.isFinite(tokens.expires_in) ||
-        !Number.isInteger(tokens.expires_in) ||
-        tokens.expires_in <= 0 ||
-        tokens.expires_in > 86_400
-      ) {
-        throw new Error('Auth API returned an invalid refreshed session');
-      }
-      return {
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_in: tokens.expires_in
-      };
-    })();
-    refreshRequests.set(deviceId, refreshRequest);
+        const tokens = (await response.json()) as {
+          access_token?: string;
+          refresh_token?: string;
+          expires_in?: number;
+        };
+        if (
+          typeof tokens.access_token !== 'string' ||
+          !tokens.access_token ||
+          typeof tokens.refresh_token !== 'string' ||
+          !tokens.refresh_token ||
+          typeof tokens.expires_in !== 'number' ||
+          !Number.isFinite(tokens.expires_in) ||
+          !Number.isInteger(tokens.expires_in) ||
+          tokens.expires_in <= 0 ||
+          tokens.expires_in > 86_400
+        ) {
+          throw new Error('Auth API returned an invalid refreshed session');
+        }
+        return {
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          expires_in: tokens.expires_in
+        };
+      })()
+    };
+    refreshRequest = request;
+    refreshRequests.set(deviceId, request);
+    void request.promise.then(
+      () => { request.completedAt = Date.now(); },
+      () => { request.completedAt = Date.now(); }
+    );
   }
 
-  let tokens: { access_token: string; refresh_token: string; expires_in: number } | null;
-  try {
-    tokens = await refreshRequest;
-  } finally {
-    if (refreshRequests.get(deviceId) === refreshRequest) refreshRequests.delete(deviceId);
-  }
+  const tokens = await refreshRequest.promise;
   if (!tokens) {
     clearAuthCookies(cookies, url);
     return null;

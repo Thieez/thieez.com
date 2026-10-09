@@ -994,6 +994,8 @@
   <title>
     {data.projectReleaseStatus === 'unreleased'
       ? `${projectName} — Not released yet`
+      : data.projectReleaseStatus === 'unpublished'
+        ? `${projectName} — Not published`
       : data.projectReleaseStatus === 'unavailable'
         ? `${projectName} — Release status unavailable`
         : data.isAccount
@@ -1107,6 +1109,13 @@
             Request Alpha access <span aria-hidden="true">↗</span>
           </a>
         {/if}
+        <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
+      </section>
+    {:else if data.projectReleaseStatus === 'unpublished'}
+      <section class="account-view" aria-labelledby="project-unpublished-heading">
+        <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
+        <h1 id="project-unpublished-heading">Not published <em>yet.</em></h1>
+        <p class="lede">This project isn’t listed as published on Thieez.</p>
         <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
       </section>
     {:else if accessCheckFailed}
@@ -1383,7 +1392,18 @@
                                   event.currentTarget.checked
                                 )}
                               />
-                              <span>{app.name}<small>{app.repository}</small></span>
+                              <span>
+                                {app.name}
+                                <small>{app.repository}</small>
+                                <small>
+                                  {app.published === false ? 'Not published' : 'Published'} ·
+                                  {app.released === true
+                                    ? 'Released'
+                                    : app.released === false
+                                      ? 'Not released'
+                                      : 'Release status unavailable'}
+                                </small>
+                              </span>
                               {#if pendingAppGrants.has(grantKey)}
                                 <small class="grant-feedback" aria-live="polite">Saving…</small>
                               {:else if appGrantErrors[grantKey]}
@@ -1619,6 +1639,14 @@
                       <div class="account-project-info">
                         <span class="account-project-slug">{project.slug}</span>
                         <strong>{project.name}</strong>
+                        <small class="account-project-release-status">
+                          {project.published === false ? 'Not published' : 'Published'} ·
+                          {project.released === true
+                            ? 'Released'
+                            : project.released === false
+                              ? 'Not released'
+                              : 'Release status unavailable'}
+                        </small>
                       </div>
                       <div class="account-project-action">
                         <span
@@ -1924,8 +1952,22 @@
             {#each projects as project, index}
               <a class="project-row" href={`/projects/${encodeURIComponent(project.slug)}`}>
                 <span class="project-number">{String(index + 1).padStart(2, '0')}</span>
-                <span class="project-copy"><strong>{project.name}</strong><span>{project.description}</span></span>
-                <span class="project-meta"><span>{project.status}</span><span>{project.meta}</span></span>
+                <span class="project-copy">
+                  <strong>{project.name}</strong>
+                  <span>{project.description}</span>
+                  <small class="project-release-status">
+                    {project.published !== false ? 'Published' : 'Not published'} ·
+                    {project.released === true
+                      ? 'Released'
+                      : project.released === false
+                        ? 'Not released'
+                        : 'Release status unavailable'}
+                  </small>
+                </span>
+                <span class="project-meta">
+                  <span>{project.status}</span>
+                  <span>{project.meta}</span>
+                </span>
                 <span class="project-arrow" aria-hidden="true">↗</span>
               </a>
             {/each}

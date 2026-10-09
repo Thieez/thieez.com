@@ -22,7 +22,7 @@ type CacheEntry = {
 };
 
 const cache = new Map<string, CacheEntry>();
-type ProjectReleaseStatus = 'released' | 'unreleased' | 'unavailable' | null;
+type ProjectReleaseStatus = 'released' | 'unreleased' | 'unpublished' | 'unavailable' | null;
 
 async function cached<T>(key: string, fetcher: () => Promise<T>): Promise<CachedResult<T>> {
   const previous = cache.get(key) as CacheEntry | undefined;
@@ -116,24 +116,30 @@ export async function loadPageData(
       (project) => project.slug.toLowerCase() === hostProject
     );
     if (publishedProject) {
-      try {
-        await fetchJson<LatestBuild>(
-          fetcher,
-          `/updates/v0/${encodeURIComponent(publishedProject.slug)}/latest`
-        );
-        projectReleaseStatus = 'released';
-      } catch (cause) {
-        const status = cause instanceof Error ? Number(cause.message.match(/\d+/)?.[0]) : undefined;
-        if (status === 404) {
-          projectReleaseStatus = 'unreleased';
-        } else {
-          console.error('Could not check project release status', cause);
-          projectReleaseStatus = 'unavailable';
+      if (typeof publishedProject.released === 'boolean') {
+        projectReleaseStatus = publishedProject.released ? 'released' : 'unreleased';
+      } else {
+        try {
+          await fetchJson<LatestBuild>(
+            fetcher,
+            `/updates/v0/${encodeURIComponent(publishedProject.slug)}/latest`
+          );
+          projectReleaseStatus = 'released';
+        } catch (cause) {
+          const status = cause instanceof Error ? Number(cause.message.match(/\d+/)?.[0]) : undefined;
+          if (status === 404) {
+            projectReleaseStatus = 'unreleased';
+          } else {
+            console.error('Could not check project release status', cause);
+            projectReleaseStatus = 'unavailable';
+          }
         }
       }
     } else if (projectIndex.error) {
       console.error('Could not load projects to check release status', projectIndex.error);
       projectReleaseStatus = 'unavailable';
+    } else {
+      projectReleaseStatus = 'unpublished';
     }
   }
 
@@ -143,6 +149,7 @@ export async function loadPageData(
       accessDenied ||
       accessCheckFailed ||
       projectReleaseStatus === 'unreleased' ||
+      projectReleaseStatus === 'unpublished' ||
       projectReleaseStatus === 'unavailable'
       ? { 'cache-control': 'no-store' }
       : {

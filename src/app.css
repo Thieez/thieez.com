@@ -67,6 +67,7 @@ h1 em{font-style:normal;color:#8d8a82}
 .project-copy{display:flex;flex-direction:column;gap:6px}
 .project-copy strong{font-size:24px;letter-spacing:-.04em}
 .project-copy span{font-size:14px;color:var(--muted)}
+.project-copy .project-release-status{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink)}
 .project-meta{display:flex;flex-direction:column;gap:6px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
 .project-meta span:first-child{color:var(--ink)}
 .project-arrow{font-size:24px;text-align:right}
@@ -106,6 +107,7 @@ h1 em{font-style:normal;color:#8d8a82}
 .account-project-row{min-height:86px}
 .account-project-info{display:flex;flex-direction:column;gap:6px}
 .account-project-info strong{font-size:18px}
+.account-project-release-status{color:var(--muted);font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:9px;letter-spacing:.05em;text-transform:uppercase}
 .account-project-slug{color:var(--muted);font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase}
 .account-project-action{display:flex;align-items:center;gap:18px}
 .account-project-status{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}

@@ -25,7 +25,7 @@ export const GET: RequestHandler = async ({ cookies, fetch, url }) => {
   if (!target) redirect(303, '/');
 
   try {
-    const accessToken = await getAccessToken(cookies, url, fetch, true);
+    const accessToken = await getAccessToken(cookies, url, fetch);
     if (accessToken) {
       const projectSlug = target.hostname.split('.')[0];
       return new Response(null, {
