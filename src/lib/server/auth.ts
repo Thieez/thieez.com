@@ -317,7 +317,7 @@ export async function getCurrentUser(
   if (!accessToken) return null;
 
   const deviceId = cookies.get(DEVICE_COOKIE);
-  let response = await fetcher(`${AUTH_BASE}/me`, {
+  let response = await fetcher(`${AUTH_BASE}/me?include_stats=false`, {
     headers: {
       Accept: 'application/json',
       Authorization: `Bearer ${accessToken}`,
@@ -332,7 +332,7 @@ export async function getCurrentUser(
       return null;
     }
     accessToken = refreshedToken;
-    response = await fetcher(`${AUTH_BASE}/me`, {
+    response = await fetcher(`${AUTH_BASE}/me?include_stats=false`, {
       headers: {
         Accept: 'application/json',
         Authorization: `Bearer ${refreshedToken}`,

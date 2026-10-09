@@ -22,7 +22,24 @@ type CacheEntry = {
 };
 
 const cache = new Map<string, CacheEntry>();
+const pendingRequests = new Map<string, Promise<unknown>>();
 type ProjectReleaseStatus = 'released' | 'unreleased' | 'unpublished' | 'unavailable' | null;
+
+function refreshCached<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  const pending = pendingRequests.get(key);
+  if (pending) return pending as Promise<T>;
+
+  const request = fetcher()
+    .then((value) => {
+      cache.set(key, { value, updatedAt: Date.now() });
+      return value;
+    })
+    .finally(() => {
+      pendingRequests.delete(key);
+    });
+  pendingRequests.set(key, request);
+  return request;
+}
 
 async function cached<T>(key: string, fetcher: () => Promise<T>): Promise<CachedResult<T>> {
   const previous = cache.get(key) as CacheEntry | undefined;
@@ -35,10 +52,21 @@ async function cached<T>(key: string, fetcher: () => Promise<T>): Promise<Cached
     };
   }
 
+  if (previous) {
+    void refreshCached(key, fetcher).catch((cause) => {
+      console.error(`Could not refresh cached page data (${key})`, cause);
+    });
+    return {
+      value: previous.value as T,
+      stale: true,
+      updatedAt: new Date(previous.updatedAt).toISOString(),
+      error: null
+    };
+  }
+
   try {
-    const value = await fetcher();
+    const value = await refreshCached(key, fetcher);
     const updatedAt = Date.now();
-    cache.set(key, { value, updatedAt });
     return { value, stale: false, updatedAt: new Date(updatedAt).toISOString(), error: null };
   } catch (cause) {
     const error = cause instanceof Error ? cause.message : 'The API request failed.';

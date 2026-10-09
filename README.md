@@ -33,8 +33,9 @@ disconnected, the graph shows an animated red flatline and reports that there
 is no heartbeat.
 
 Public page data is loaded during server rendering and kept in a per-process
-cache for 60 seconds; the browser uses that result instead of immediately
-requesting the same data again. The account and dashboard pages skip unrelated
+cache for 60 seconds; expired entries are served immediately while a background
+refresh runs. The browser uses that result instead of immediately requesting
+the same data again. The account and dashboard pages skip unrelated
 public data requests, and project-update events refresh only the project list.
 The rendered page is also cached at the
 Vercel edge for 60 seconds, with stale responses allowed during revalidation

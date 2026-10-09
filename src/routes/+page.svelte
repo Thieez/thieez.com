@@ -46,6 +46,7 @@
   let hasProjectsData = data.projects?.value !== null && data.projects?.value !== undefined;
   let authSession: AuthSession | null = null;
   let authLoading = true;
+  let authError = '';
   let dashboardAuthError = '';
   let accountAuthError = '';
   let profileMenuOpen = false;
@@ -225,6 +226,7 @@
       const authTask = restoreAuth()
         .then((session) => {
           authSession = session;
+          authError = '';
           if (accessDenied && session) void loadAlphaAccess();
           if (data.isAccount && session) void loadAccountDetails();
           if (data.isDashboard) {
@@ -290,6 +292,9 @@
         })
         .catch((cause) => {
           authSession = null;
+          authError = cause instanceof Error
+            ? cause.message
+            : 'Could not verify your session.';
           if (accessDenied) {
             alphaAccessError = cause instanceof Error
               ? cause.message
@@ -1063,6 +1068,13 @@
               </div>
             {/if}
           </div>
+        {:else if authError}
+          <button
+            class="auth-button"
+            title={authError}
+            aria-label={`Session verification failed. Retry: ${authError}`}
+            onclick={() => window.location.reload()}
+          >Session error · Retry</button>
         {:else}
           <button class="auth-button" onclick={() => void goto('/alpha')}>Sign in</button>
         {/if}
@@ -1071,7 +1083,7 @@
   </header>
   {#if staleDataResources.size}
     <div class="stale-notice" role="status">
-      Showing cached data because the API could not be reached. The information may be out of date.
+      Showing the most recently cached data while it refreshes. Updates may take a moment to appear.
     </div>
   {/if}
 
