@@ -2009,7 +2009,7 @@
                 <p class="version">{build.tag_name || 'Latest'}</p>
                 <p class="asset-name">{(apk || pluginZip)?.name}</p>
               </div>
-              <a class="download-button" href={(apk || pluginZip)?.browser_download_url || (apk || pluginZip)?.download_url} download>
+              <a class="download-button" href={(apk || pluginZip)?.browser_download_url || (apk || pluginZip)?.download_url} download={(apk || pluginZip)?.name}>
                 Download latest {isNote ? 'plugin' : 'APK'} <span aria-hidden="true">↓</span>
               </a>
             </div>
