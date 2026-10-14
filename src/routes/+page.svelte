@@ -679,7 +679,10 @@
     profileMenuOpen = false;
     accountOpen = false;
     if (!authSession) return;
-    void goto('/dashboard');
+    const dashboardUrl = window.location.hostname.toLowerCase().endsWith('.thieez.com')
+      ? 'https://thieez.com/dashboard'
+      : '/dashboard';
+    window.location.assign(dashboardUrl);
   };
 
   const closeAdmin = () => {
