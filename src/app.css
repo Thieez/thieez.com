@@ -41,7 +41,9 @@ button{font:inherit}
 .alpha-panel-label span{color:var(--muted)}
 .alpha-copy{max-width:500px;margin:0 0 28px;font-size:15px}
 .alpha-button{display:inline-flex;align-items:center;justify-content:space-between;gap:28px;width:100%;min-height:52px;padding:0 18px;border:1px solid var(--ink);background:var(--lime);color:var(--ink);font-size:13px;font-weight:700;text-decoration:none;cursor:pointer}
-.alpha-button-icon{font-size:20px;font-weight:400;line-height:1}
+.alpha-button-icon{width:18px;height:18px;flex:none}
+.google-icon{width:20px;height:20px}
+.alpha-shell .alpha-panel,.alpha-shell .alpha-button,.alpha-shell .alpha-status,.alpha-shell .state-panel,.alpha-shell .alpha-error{border-radius:0}
 .alpha-button:hover{filter:brightness(.92)}
 .alpha-button:disabled{opacity:.6;cursor:wait}
 .alpha-link-button{margin-top:4px}
