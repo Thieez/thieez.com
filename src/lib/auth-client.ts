@@ -184,6 +184,17 @@ export async function logout(): Promise<void> {
   if (!response.ok) throw new Error(`Could not log out (${response.status})`);
 }
 
+export async function deleteAccount(): Promise<void> {
+  const response = await request('/auth/account', { method: 'DELETE' });
+  if (!response.ok) {
+    const payload = (await response.json()) as { error?: string; detail?: string };
+    throw new Error(payload.error || payload.detail || `Could not delete account (${response.status})`);
+  }
+  cachedAuthSession = null;
+  lastKnownAuthSession = null;
+  restoreAuthVersion += 1;
+}
+
 export async function sendPresenceHeartbeat(): Promise<void> {
   const response = await request('/auth/presence', { method: 'POST' });
   if (!response.ok) throw new Error(`Could not update presence (${response.status})`);

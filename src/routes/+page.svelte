@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjectLatestBuild, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
-  import { addAdminAccessEntry, createUserApiKey, getAdminAccess, getAdminUserDevices, getAlphaAccessStatus, getLastKnownAuthSession, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AlphaAccessStatus, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
+  import { addAdminAccessEntry, createUserApiKey, deleteAccount as deleteAccountRequest, getAdminAccess, getAdminUserDevices, getAlphaAccessStatus, getLastKnownAuthSession, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AlphaAccessStatus, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
 
@@ -74,6 +74,9 @@
   let authError = '';
   let dashboardAuthError = '';
   let accountAuthError = '';
+  let accountDeleteConfirmation = '';
+  let accountDeletePending = false;
+  let accountDeleteError = '';
   let profileMenuOpen = false;
   let accountOpen = data.isAccount;
   let adminOpen = false;
@@ -532,6 +535,30 @@
       if (adminRosterRefreshTimer !== undefined) window.clearInterval(adminRosterRefreshTimer);
       adminRosterRefreshTimer = undefined;
       if (data.isAccount) void goto('/');
+    }
+  };
+
+  const handleAccountDeletion = async () => {
+    if (accountDeleteConfirmation.trim() !== 'DELETE' || accountDeletePending) return;
+    accountDeletePending = true;
+    accountDeleteError = '';
+    try {
+      await deleteAccountRequest();
+      authSession = null;
+      cachedAuthSession = null;
+      if (authRefreshTimer !== undefined) window.clearInterval(authRefreshTimer);
+      if (presenceHeartbeatTimer !== undefined) window.clearInterval(presenceHeartbeatTimer);
+      if (adminRosterRefreshTimer !== undefined) window.clearInterval(adminRosterRefreshTimer);
+      authRefreshTimer = undefined;
+      presenceHeartbeatTimer = undefined;
+      adminRosterRefreshTimer = undefined;
+      await goto('/');
+    } catch (cause) {
+      accountDeleteError = cause instanceof Error
+        ? cause.message
+        : 'Could not delete your account. Please try again.';
+    } finally {
+      accountDeletePending = false;
     }
   };
 
@@ -1915,6 +1942,32 @@
               <p class="limits-note">Limits adjust automatically as shared Lisnnto storage fills up.</p>
             {/if}
           {/if}
+
+          <section class="account-danger-zone" aria-labelledby="delete-account-heading">
+            <div class="section-heading">
+              <h2 id="delete-account-heading">Danger zone</h2>
+            </div>
+            <p>Permanently delete your account and all associated data. This cannot be undone, even from backups.</p>
+            <label for="delete-account-confirmation">Type DELETE to confirm</label>
+            <input
+              id="delete-account-confirmation"
+              type="text"
+              autocomplete="off"
+              bind:value={accountDeleteConfirmation}
+              disabled={accountDeletePending}
+            />
+            {#if accountDeleteError}
+              <div class="state-panel error-panel" role="alert">{accountDeleteError}</div>
+            {/if}
+            <button
+              class="delete-account-button"
+              type="button"
+              disabled={accountDeletePending || accountDeleteConfirmation.trim() !== 'DELETE'}
+              onclick={() => void handleAccountDeletion()}
+            >
+              {accountDeletePending ? 'Deleting account…' : 'Delete account permanently'}
+            </button>
+          </section>
         {/if}
       </section>
     {:else if projectReleaseStatus === 'unreleased'}
