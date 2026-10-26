@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
   import { unzipSync } from 'fflate';
   import MarkdownIt from 'markdown-it';
+  import ProjectReleaseSection from '$lib/components/ProjectReleaseSection.svelte';
   import type { PageData } from './$types';
   import { getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjectDocs, getProjectLatestBuild, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiAsset, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
   import { addAdminAccessEntry, createUserApiKey, deleteAccount as deleteAccountRequest, getAdminAccess, getAdminUserDevices, getAlphaAccessStatus, getLastKnownAuthSession, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AlphaAccessStatus, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
@@ -30,11 +31,29 @@
   let projectName = data.projectName;
   let projectReleaseStatus: ProjectReleaseStatus = data.projectReleaseStatus;
   let projectRelease: CachedResult<LatestBuild> | null = data.projectRelease;
-  let projectDocsHtml = '';
+  let projectDocsBeforeHtml = '';
+  let projectDocsAfterHtml = '';
+  let projectHasLandingPage = false;
+  let projectDocsHasReleaseMarker = false;
   let projectDocsError = '';
   let projectDocsStarted = false;
   const markdown = new MarkdownIt({ html: false, linkify: true });
-  let currentProject = data.project;
+  const defaultImageRenderer = markdown.renderer.rules.image;
+  markdown.renderer.rules.image = (tokens, index, options, environment, renderer) => {
+    const token = tokens[index];
+    const source = token.attrGet('src');
+    const imageBaseUrl = (environment as { imageBaseUrl?: string }).imageBaseUrl;
+    if (typeof source === 'string' && imageBaseUrl) {
+      try {
+        token.attrSet('src', new URL(source, imageBaseUrl).href);
+      } catch {
+        // Leave malformed image URLs for the browser to reject.
+      }
+    }
+    return defaultImageRenderer
+      ? defaultImageRenderer(tokens, index, options, environment, renderer)
+      : renderer.renderToken(tokens, index, options);
+  };
   let projectReleaseLoading =
     data.isProjectHost &&
     !data.isLisnnto &&
@@ -335,8 +354,22 @@
     if (!projectSlug || projectDocsStarted || accessDenied || accessCheckFailed) return;
     projectDocsStarted = true;
     try {
-      const content = await getProjectDocs(projectSlug);
-      if (content) projectDocsHtml = markdown.render(content);
+      const document = await getProjectDocs(projectSlug);
+      if (document) {
+        projectHasLandingPage = true;
+        const marker = '<!-- releases -->';
+        const markerIndex = document.content.indexOf(marker);
+        projectDocsHasReleaseMarker = markerIndex !== -1;
+        const before = projectDocsHasReleaseMarker
+          ? document.content.slice(0, markerIndex)
+          : document.content;
+        const after = projectDocsHasReleaseMarker
+          ? document.content.slice(markerIndex + marker.length)
+          : '';
+        const environment = { imageBaseUrl: document.imageBaseUrl };
+        projectDocsBeforeHtml = markdown.render(before, environment);
+        projectDocsAfterHtml = markdown.render(after, environment);
+      }
     } catch (cause) {
       projectDocsError =
         cause instanceof Error ? cause.message : 'Project documentation could not be loaded.';
@@ -1297,7 +1330,9 @@
 
 <svelte:head>
   <title>
-    {projectReleaseStatus === 'released' && !isLisnnto && !isNote
+    {projectHasLandingPage
+      ? projectName
+      : projectReleaseStatus === 'released' && !isLisnnto && !isNote
       ? `${projectName} — Latest release`
       : projectReleaseStatus === 'unreleased'
       ? `${projectName} — Not released yet`
@@ -1404,6 +1439,43 @@
   {/if}
 
   <main class="main-content">
+    {#if projectHasLandingPage && data.isProjectHost && !accessDenied && !accessCheckFailed}
+      <section class="project-docs-section" aria-label={`${projectName} project information`}>
+        {#if projectDocsBeforeHtml}
+          <article class="project-docs-content">{@html projectDocsBeforeHtml}</article>
+        {/if}
+        {#if projectDocsHasReleaseMarker}
+          <ProjectReleaseSection
+            loading={projectReleaseLoading}
+            release={projectRelease?.value ?? null}
+            error={projectRelease?.error ?? ''}
+            {pendingWindowsDownloads}
+            {windowsDownloadErrors}
+            {getAssetDownloadUrl}
+            downloadWindowsExecutable={(asset) => void downloadWindowsExecutable(asset)}
+          />
+        {/if}
+        {#if projectDocsAfterHtml}
+          <article class="project-docs-content">{@html projectDocsAfterHtml}</article>
+        {/if}
+        {#if !projectDocsHasReleaseMarker}
+          <ProjectReleaseSection
+            loading={projectReleaseLoading}
+            release={projectRelease?.value ?? null}
+            error={projectRelease?.error ?? ''}
+            {pendingWindowsDownloads}
+            {windowsDownloadErrors}
+            {getAssetDownloadUrl}
+            downloadWindowsExecutable={(asset) => void downloadWindowsExecutable(asset)}
+          />
+        {/if}
+      </section>
+    {:else}
+    {#if projectDocsError && data.isProjectHost && !accessDenied && !accessCheckFailed}
+      <div class="state-panel error-panel" role="status">
+        <strong>Project information is temporarily unavailable.</strong>
+      </div>
+    {/if}
     {#if accessDenied}
       <section class="account-view" aria-labelledby="access-denied-heading">
         <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
@@ -2063,24 +2135,19 @@
       </section>
     {:else if projectReleaseStatus === 'unreleased'}
       <section class="account-view" aria-labelledby="project-unreleased-heading">
-        <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
-        <h1 id="project-unreleased-heading">Not released <em>yet.</em></h1>
-        <p class="lede">This project is published on Thieez, but it hasn’t been released yet. Check back soon.</p>
-        <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
+        <div class="state-panel" id="project-unreleased-heading">
+          <strong>No release is available yet.</strong>
+        </div>
       </section>
     {:else if projectReleaseStatus === 'unavailable'}
       <section class="account-view" aria-labelledby="project-release-check-heading">
-        <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
-        <h1 id="project-release-check-heading">Release check <em>unavailable.</em></h1>
-        <p class="lede">We couldn’t check whether this project has been released. Please try again shortly.</p>
-        <button class="text-button" onclick={() => window.location.reload()}>Try again <span aria-hidden="true">↗</span></button>
+        <div class="state-panel error-panel" id="project-release-check-heading" role="alert">
+          <strong>Couldn’t load releases.</strong>
+          <button class="text-button" onclick={() => window.location.reload()}>Try again</button>
+        </div>
       </section>
     {:else if projectReleaseStatus === 'released' && !isLisnnto && !isNote}
-      <section class="hero download-hero" aria-labelledby="project-release-heading">
-        <p class="eyebrow">THIEEZ / {projectName.toUpperCase()}</p>
-        <h1 id="project-release-heading">{projectName}<br /><em>Latest release.</em></h1>
-        <p class="lede">{currentProject?.description || 'Download the latest release of this project.'}</p>
-
+      <section class="hero download-hero" aria-label={`${projectName} releases`}>
         {#if projectRelease?.error &&
         !projectRelease.value &&
         !projectRelease.error.includes('(404)')}
@@ -2169,9 +2236,6 @@
             <span>This project is enabled for releases, but no downloadable stable release was found.</span>
           </div>
         {/if}
-      </section>
-      <section class="aside-note">
-        <a class="text-button" href="https://thieez.com/">Back to Thieez <span aria-hidden="true">↗</span></a>
       </section>
     {:else if isLisnnto || isNote}
       <section class="hero download-hero" aria-labelledby="download-heading">
@@ -2517,18 +2581,6 @@
         {/if}
       </section>
     {/if}
-    {#if data.isProjectHost && !accessDenied && !accessCheckFailed && (projectDocsHtml || projectDocsError)}
-      <section class="project-docs-section" aria-label={`${projectName} documentation`}>
-        {#if projectDocsError}
-          <div class="state-panel error-panel" role="alert">
-            <strong>Couldn’t load project documentation.</strong>
-            <span>{projectDocsError}</span>
-          </div>
-        {/if}
-        {#if projectDocsHtml}
-          <article class="project-docs-content">{@html projectDocsHtml}</article>
-        {/if}
-      </section>
     {/if}
   </main>
 

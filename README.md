@@ -24,6 +24,10 @@ Released project pages, including Lisnnto, group every `.apk` under Android
 and every `.exe` or `.zip` under Windows. Windows ZIP downloads are inspected
 in the browser and save only the contained `.exe`; archives with no executable
 or an ambiguous set of executables show an error instead of downloading the ZIP.
+Published project pages load `docs/lander.md` from the matching repository.
+Markdown can place release downloads with `<!-- releases -->`; otherwise they
+appear after the document. Raw HTML is disabled, and relative image paths are
+resolved against the Markdown file in GitHub.
 
 The homepage subscribes to `wss://api.thieez.com/projects/v0/updates` and
 refreshes the list after a signed GitHub `Repository` webhook event. The

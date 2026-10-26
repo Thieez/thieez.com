@@ -113,6 +113,11 @@ export type LatestBuild = {
   assets: ApiAsset[];
 };
 
+export type ProjectDocs = {
+  content: string;
+  imageBaseUrl: string;
+};
+
 export type PluginBuild = LatestBuild;
 
 function isBrowser(): boolean {
@@ -331,7 +336,7 @@ export async function getProjectLatestBuild(slug: string): Promise<LatestBuild |
   }
 }
 
-export async function getProjectDocs(slug: string): Promise<string | null> {
+export async function getProjectDocs(slug: string): Promise<ProjectDocs | null> {
   const response = await fetchWithTimeout(
     `${API_BASE}/docs/v0/${encodeURIComponent(slug)}`,
     { headers: { Accept: 'text/markdown' } }
@@ -342,7 +347,10 @@ export async function getProjectDocs(slug: string): Promise<string | null> {
     error.status = response.status;
     throw error;
   }
-  return response.text();
+  return {
+    content: await response.text(),
+    imageBaseUrl: response.headers.get('X-Docs-Image-Base-Url') ?? ''
+  };
 }
 
 export function getPluginZipAsset(build: PluginBuild): ApiAsset | undefined {
