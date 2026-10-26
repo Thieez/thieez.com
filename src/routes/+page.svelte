@@ -1439,6 +1439,11 @@
   {/if}
 
   <main class="main-content">
+    {#if data.isProjectHost && projectSlug && !accessDenied && !accessCheckFailed}
+      <section class="project-page-heading" aria-labelledby="project-page-title">
+        <h1 id="project-page-title">{projectName}</h1>
+      </section>
+    {/if}
     {#if projectHasLandingPage && data.isProjectHost && !accessDenied && !accessCheckFailed}
       <section class="project-docs-section" aria-label={`${projectName} project information`}>
         {#if projectDocsBeforeHtml}
