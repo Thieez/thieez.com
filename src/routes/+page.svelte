@@ -2094,7 +2094,7 @@
                           class="download-button"
                           href={getAssetDownloadUrl(asset)}
                           download={asset.name}
-                          aria-label={`Install for Android (${asset.name})`}
+                          aria-label={`Download for Android (${asset.name})`}
                         >
                           Install <span aria-hidden="true">↓</span>
                         </a>
@@ -2112,7 +2112,7 @@
                             class="download-button"
                             type="button"
                             disabled={pendingWindowsDownloads.has(asset.name)}
-                            aria-label={`Install for Windows (${asset.name})`}
+                            aria-label={`Download for Windows (${asset.name})`}
                             onclick={() => void downloadWindowsExecutable(asset)}
                           >
                             {pendingWindowsDownloads.has(asset.name)
@@ -2128,7 +2128,7 @@
                             class="download-button"
                             href={getAssetDownloadUrl(asset)}
                             download={asset.name}
-                            aria-label={`Install for Windows (${asset.name})`}
+                            aria-label={`Download for Windows (${asset.name})`}
                           >
                             Install <span aria-hidden="true">↓</span>
                           </a>
@@ -2160,7 +2160,7 @@
         <p class="eyebrow">THIEEZ / {isNote ? 'NOTE' : 'LISNNTO'}</p>
         <h1 id="download-heading">
           {#if isLisnnto}
-            Download
+            Lisnnto
           {:else}
             The latest build,<br /><em>ready when you are.</em>
           {/if}
@@ -2192,11 +2192,11 @@
               </div>
             {/if}
             {#if isLisnnto}
+              <div class="download-section-label">DOWNLOAD</div>
               <p class="version">{build.tag_name || 'Latest'}</p>
               <div class="project-release-platforms">
                 {#if lisnntoAndroidAssets.length}
                   <section class="release-platform" aria-label="Android installation files">
-                    <h2>Android</h2>
                     <div class="platform-downloads">
                       {#each lisnntoAndroidAssets as asset (asset.name)}
                         <a
@@ -2205,7 +2205,7 @@
                           download={asset.name}
                           aria-label={`Install for Android (${asset.name})`}
                         >
-                          Install <span aria-hidden="true">↓</span>
+                          Android <span aria-hidden="true">↓</span>
                         </a>
                       {/each}
                     </div>
@@ -2213,7 +2213,6 @@
                 {/if}
                 {#if lisnntoWindowsAssets.length}
                   <section class="release-platform" aria-label="Windows installation files">
-                    <h2>Windows</h2>
                     <div class="platform-downloads">
                       {#each lisnntoWindowsAssets as asset (asset.name)}
                         {#if /\.zip$/i.test(asset.name)}
@@ -2226,7 +2225,7 @@
                           >
                             {pendingWindowsDownloads.has(asset.name)
                               ? 'Preparing installer…'
-                              : 'Install'}
+                              : 'Windows'}
                             <span aria-hidden="true">↓</span>
                           </button>
                           {#if windowsDownloadErrors[asset.name]}
@@ -2239,7 +2238,7 @@
                             download={asset.name}
                             aria-label={`Install for Windows (${asset.name})`}
                           >
-                            Install <span aria-hidden="true">↓</span>
+                            Windows <span aria-hidden="true">↓</span>
                           </a>
                         {/if}
                       {/each}
