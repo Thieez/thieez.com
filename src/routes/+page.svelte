@@ -75,8 +75,6 @@
 
   const isAndroidInstall = (asset: ApiAsset) => /\.apk$/i.test(asset.name);
   const isWindowsInstall = (asset: ApiAsset) => /\.(?:exe|zip)$/i.test(asset.name);
-  const getWindowsDownloadLabel = (asset: ApiAsset) =>
-    `Download ${asset.name.replace(/\.zip$/i, '')}`;
   const getAssetDownloadUrl = (asset: ApiAsset) =>
     asset.download_url
       ? new URL(asset.download_url, `${API_BASE}/`).href
@@ -2092,8 +2090,13 @@
                     <h2>Android</h2>
                     <div class="platform-downloads">
                       {#each androidAssets as asset (asset.name)}
-                        <a class="download-button" href={getAssetDownloadUrl(asset)} download={asset.name}>
-                          {asset.name} <span aria-hidden="true">↓</span>
+                        <a
+                          class="download-button"
+                          href={getAssetDownloadUrl(asset)}
+                          download={asset.name}
+                          aria-label={`Install for Android (${asset.name})`}
+                        >
+                          Install <span aria-hidden="true">↓</span>
                         </a>
                       {/each}
                     </div>
@@ -2109,19 +2112,25 @@
                             class="download-button"
                             type="button"
                             disabled={pendingWindowsDownloads.has(asset.name)}
+                            aria-label={`Install for Windows (${asset.name})`}
                             onclick={() => void downloadWindowsExecutable(asset)}
                           >
                             {pendingWindowsDownloads.has(asset.name)
                               ? 'Preparing installer…'
-                              : getWindowsDownloadLabel(asset)}
+                              : 'Install'}
                             <span aria-hidden="true">↓</span>
                           </button>
                           {#if windowsDownloadErrors[asset.name]}
                             <p class="download-error" role="alert">{windowsDownloadErrors[asset.name]}</p>
                           {/if}
                         {:else}
-                          <a class="download-button" href={getAssetDownloadUrl(asset)} download={asset.name}>
-                            {asset.name} <span aria-hidden="true">↓</span>
+                          <a
+                            class="download-button"
+                            href={getAssetDownloadUrl(asset)}
+                            download={asset.name}
+                            aria-label={`Install for Windows (${asset.name})`}
+                          >
+                            Install <span aria-hidden="true">↓</span>
                           </a>
                         {/if}
                       {/each}
@@ -2149,8 +2158,16 @@
     {:else if isLisnnto || isNote}
       <section class="hero download-hero" aria-labelledby="download-heading">
         <p class="eyebrow">THIEEZ / {isNote ? 'NOTE' : 'LISNNTO'}</p>
-        <h1 id="download-heading">The latest build,<br /><em>ready when you are.</em></h1>
-        <p class="lede">{isNote ? 'Download the newest Obsidian plugin build.' : 'A small, fast Android companion for keeping your listening life in order. Download the newest tester build below.'}</p>
+        <h1 id="download-heading">
+          {#if isLisnnto}
+            Download
+          {:else}
+            The latest build,<br /><em>ready when you are.</em>
+          {/if}
+        </h1>
+        {#if isNote}
+          <p class="lede">Download the newest Obsidian plugin build.</p>
+        {/if}
 
         {#if loading}
           <div class="state-panel" aria-live="polite">
@@ -2167,11 +2184,13 @@
           ? lisnntoAndroidAssets.length > 0 || lisnntoWindowsAssets.length > 0
           : pluginZip)}
           <div class="release-card">
-            <div class="release-topline">
-              <span class="release-label">LATEST RELEASE</span>
-              <span class="release-rule"></span>
-              <span class="release-date">{formatReleaseDate(build.published_at)}</span>
-            </div>
+            {#if isNote}
+              <div class="release-topline">
+                <span class="release-label">LATEST RELEASE</span>
+                <span class="release-rule"></span>
+                <span class="release-date">{formatReleaseDate(build.published_at)}</span>
+              </div>
+            {/if}
             {#if isLisnnto}
               <p class="version">{build.tag_name || 'Latest'}</p>
               <div class="project-release-platforms">
@@ -2180,8 +2199,13 @@
                     <h2>Android</h2>
                     <div class="platform-downloads">
                       {#each lisnntoAndroidAssets as asset (asset.name)}
-                        <a class="download-button" href={getAssetDownloadUrl(asset)} download={asset.name}>
-                          {asset.name} <span aria-hidden="true">↓</span>
+                        <a
+                          class="download-button"
+                          href={getAssetDownloadUrl(asset)}
+                          download={asset.name}
+                          aria-label={`Install for Android (${asset.name})`}
+                        >
+                          Install <span aria-hidden="true">↓</span>
                         </a>
                       {/each}
                     </div>
@@ -2197,19 +2221,25 @@
                             class="download-button"
                             type="button"
                             disabled={pendingWindowsDownloads.has(asset.name)}
+                            aria-label={`Install for Windows (${asset.name})`}
                             onclick={() => void downloadWindowsExecutable(asset)}
                           >
                             {pendingWindowsDownloads.has(asset.name)
                               ? 'Preparing installer…'
-                              : getWindowsDownloadLabel(asset)}
+                              : 'Install'}
                             <span aria-hidden="true">↓</span>
                           </button>
                           {#if windowsDownloadErrors[asset.name]}
                             <p class="download-error" role="alert">{windowsDownloadErrors[asset.name]}</p>
                           {/if}
                         {:else}
-                          <a class="download-button" href={getAssetDownloadUrl(asset)} download={asset.name}>
-                            {asset.name} <span aria-hidden="true">↓</span>
+                          <a
+                            class="download-button"
+                            href={getAssetDownloadUrl(asset)}
+                            download={asset.name}
+                            aria-label={`Install for Windows (${asset.name})`}
+                          >
+                            Install <span aria-hidden="true">↓</span>
                           </a>
                         {/if}
                       {/each}
