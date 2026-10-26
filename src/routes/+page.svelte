@@ -37,6 +37,11 @@
   let projectDocsHasReleaseMarker = false;
   let projectDocsError = '';
   let projectDocsStarted = false;
+  let hostedProjectStarted = false;
+  let projectIsPublished = false;
+  let projectIsReleased = false;
+  const isPublicProject = (project: Project) =>
+    project.published === true || project.released === true;
   const markdown = new MarkdownIt({ html: false, linkify: true });
   const defaultImageRenderer = markdown.renderer.rules.image;
   markdown.renderer.rules.image = (tokens, index, options, environment, renderer) => {
@@ -56,8 +61,6 @@
   };
   let projectReleaseLoading =
     data.isProjectHost &&
-    !data.isLisnnto &&
-    !data.isNote &&
     !data.isAccount &&
     !data.isDashboard &&
     !data.accessDenied &&
@@ -67,7 +70,7 @@
   let projectReleaseStarted = false;
   let accessDenied = data.accessDenied;
   let accessCheckFailed = data.accessCheckFailed;
-  let projects: Project[] = data.projects?.value?.projects ?? [];
+  let projects: Project[] = (data.projects?.value?.projects ?? []).filter(isPublicProject);
   let build: LatestBuild | null = data.build?.value ?? null;
   let loading =
     (!data.build?.value && (data.isLisnnto || data.isNote)) ||
@@ -288,7 +291,7 @@
       projectError = '';
       try {
         const result = await getProjects(forceRefresh);
-        projects = result.projects;
+        projects = result.projects.filter(isPublicProject);
         hasProjectsData = true;
         markStale('projects', false);
         apiStatus = result.source === 'fallback' ? 'degraded' : 'online';
@@ -373,6 +376,55 @@
     } catch (cause) {
       projectDocsError =
         cause instanceof Error ? cause.message : 'Project documentation could not be loaded.';
+    }
+  };
+
+  const loadHostedProject = async () => {
+    if (
+      !projectSlug ||
+      hostedProjectStarted ||
+      accessDenied ||
+      accessCheckFailed
+    ) return;
+    hostedProjectStarted = true;
+    projectReleaseLoading = true;
+    try {
+      const result = await getProjects();
+      if (result.source === 'fallback') {
+        projectRelease = {
+          value: null,
+          stale: false,
+          updatedAt: null,
+          error: 'The project catalog is unavailable.'
+        };
+        projectReleaseStatus = 'unavailable';
+        projectReleaseLoading = false;
+        return;
+      }
+      const project = result.projects.find(
+        (candidate) => candidate.slug.toLowerCase() === projectSlug.toLowerCase()
+      );
+      projectIsPublished = project?.published === true;
+      projectIsReleased = project?.released === true;
+      if (!projectIsPublished && !projectIsReleased) {
+        projectReleaseStatus = 'unpublished';
+        projectReleaseLoading = false;
+        return;
+      }
+
+      projectReleaseStatus = projectIsReleased ? 'released' : 'unreleased';
+      if (projectIsPublished) void loadHostedProjectDocs();
+      if (projectIsReleased) void loadHostedProjectRelease();
+      else projectReleaseLoading = false;
+    } catch (cause) {
+      projectRelease = {
+        value: null,
+        stale: false,
+        updatedAt: null,
+        error: cause instanceof Error ? cause.message : 'Project status could not be loaded.'
+      };
+      projectReleaseStatus = 'unavailable';
+      projectReleaseLoading = false;
     }
   };
 
@@ -503,21 +555,10 @@
     }
     if (data.isDashboard || data.isAccount) {
       loading = false;
+    } else if (data.isProjectHost && projectSlug) {
+      void loadHostedProject();
     } else if (isLisnnto || isNote) {
       if (!build) void load();
-    } else if (
-      data.isProjectHost &&
-      projectSlug &&
-      !accessDenied &&
-      !accessCheckFailed
-    ) {
-      void loadHostedProjectDocs();
-      if (
-        !projectReleaseStatus ||
-        (projectReleaseStatus === 'released' && !projectRelease?.value)
-      ) {
-        void loadHostedProjectRelease();
-      }
     }
     void (async () => {
       const authTask = (data.hasAuthSession ? restoreAuth() : Promise.resolve(null))
@@ -1332,7 +1373,7 @@
   <title>
     {projectHasLandingPage
       ? projectName
-      : projectReleaseStatus === 'released' && !isLisnnto && !isNote
+      : projectReleaseStatus === 'released' && data.isProjectHost
       ? `${projectName} — Latest release`
       : projectReleaseStatus === 'unreleased'
       ? `${projectName} — Not released yet`
@@ -1444,12 +1485,12 @@
         <h1 id="project-page-title">{projectName}</h1>
       </section>
     {/if}
-    {#if projectHasLandingPage && data.isProjectHost && !accessDenied && !accessCheckFailed}
+    {#if projectIsPublished && projectHasLandingPage && data.isProjectHost && !accessDenied && !accessCheckFailed}
       <section class="project-docs-section" aria-label={`${projectName} project information`}>
         {#if projectDocsBeforeHtml}
           <article class="project-docs-content">{@html projectDocsBeforeHtml}</article>
         {/if}
-        {#if projectDocsHasReleaseMarker}
+        {#if projectIsReleased && projectDocsHasReleaseMarker}
           <ProjectReleaseSection
             loading={projectReleaseLoading}
             release={projectRelease?.value ?? null}
@@ -1463,7 +1504,7 @@
         {#if projectDocsAfterHtml}
           <article class="project-docs-content">{@html projectDocsAfterHtml}</article>
         {/if}
-        {#if !projectDocsHasReleaseMarker}
+        {#if projectIsReleased && !projectDocsHasReleaseMarker}
           <ProjectReleaseSection
             loading={projectReleaseLoading}
             release={projectRelease?.value ?? null}
@@ -2151,7 +2192,7 @@
           <button class="text-button" onclick={() => window.location.reload()}>Try again</button>
         </div>
       </section>
-    {:else if projectReleaseStatus === 'released' && !isLisnnto && !isNote}
+    {:else if projectReleaseStatus === 'released' && data.isProjectHost}
       <section class="hero download-hero" aria-label={`${projectName} releases`}>
         {#if projectRelease?.error &&
         !projectRelease.value &&
