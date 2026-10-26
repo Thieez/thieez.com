@@ -2,8 +2,9 @@
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
+  import { unzipSync } from 'fflate';
   import type { PageData } from './$types';
-  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjectLatestBuild, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
+  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjectLatestBuild, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiAsset, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
   import { addAdminAccessEntry, createUserApiKey, deleteAccount as deleteAccountRequest, getAdminAccess, getAdminUserDevices, getAlphaAccessStatus, getLastKnownAuthSession, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AlphaAccessStatus, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
@@ -50,6 +51,8 @@
   let projectRefresh: Promise<void> | null = null;
   let error = data.build?.value ? '' : data.build?.error ?? '';
   let projectError = data.projects?.value ? '' : data.projects?.error ?? '';
+  let pendingWindowsDownloads = new Set<string>();
+  let windowsDownloadErrors: Record<string, string> = {};
   let apiStatus: 'checking' | 'online' | 'degraded' | 'offline' =
     data.build?.stale || data.projects?.stale || data.projects?.value?.source === 'fallback'
       ? 'degraded'
@@ -67,6 +70,69 @@
   let staleDataResources = new Set(
     initialCacheResults.filter(([, result]) => result?.stale).map(([resource]) => resource)
   );
+
+  const isAndroidInstall = (asset: ApiAsset) => /\.apk$/i.test(asset.name);
+  const isWindowsInstall = (asset: ApiAsset) => /\.(?:exe|zip)$/i.test(asset.name);
+  const getAssetDownloadUrl = (asset: ApiAsset) =>
+    asset.download_url
+      ? new URL(asset.download_url, `${API_BASE}/`).href
+      : asset.browser_download_url;
+
+  const downloadWindowsExecutable = async (asset: ApiAsset) => {
+    const downloadUrl = getAssetDownloadUrl(asset);
+    if (!downloadUrl) return;
+
+    pendingWindowsDownloads = new Set(pendingWindowsDownloads).add(asset.name);
+    windowsDownloadErrors = { ...windowsDownloadErrors, [asset.name]: '' };
+    try {
+      const response = await fetch(downloadUrl);
+      if (!response.ok) {
+        throw new Error(`The download failed (${response.status}).`);
+      }
+
+      const archive = new Uint8Array(await response.arrayBuffer());
+      const executables = unzipSync(archive, {
+        filter: ({ name }) => name.toLowerCase().endsWith('.exe')
+      });
+      const executablePaths = Object.keys(executables);
+      const expectedName = asset.name.replace(/\.zip$/i, '').toLowerCase();
+      const executablePath = executablePaths.find(
+        (path) => path.split(/[\\/]/).pop()?.toLowerCase() === expectedName
+      ) ?? (executablePaths.length === 1 ? executablePaths[0] : undefined);
+
+      if (!executablePath) {
+        throw new Error(
+          executablePaths.length
+            ? 'The ZIP contains multiple .exe files and the installer could not be identified.'
+            : 'The ZIP does not contain a Windows .exe installer.'
+        );
+      }
+
+      const executableName = executablePath.split(/[\\/]/).pop();
+      if (!executableName) throw new Error('The ZIP contains an invalid executable filename.');
+
+      const objectUrl = URL.createObjectURL(
+        new Blob([executables[executablePath]], { type: 'application/vnd.microsoft.portable-executable' })
+      );
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = executableName;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (cause) {
+      windowsDownloadErrors = {
+        ...windowsDownloadErrors,
+        [asset.name]: cause instanceof Error ? cause.message : 'The installer could not be extracted.'
+      };
+    } finally {
+      const pending = new Set(pendingWindowsDownloads);
+      pending.delete(asset.name);
+      pendingWindowsDownloads = pending;
+    }
+  };
+
   let hasProjectsData = data.projects?.value !== null && data.projects?.value !== undefined;
   let authSession: AuthSession | null = null;
   let cachedAuthSession: AuthSession | null = data.hasAuthSession ? getLastKnownAuthSession() : null;
@@ -2002,30 +2068,64 @@
           {@const assets = projectRelease.value.assets.filter(
             (asset) => asset.download_url || asset.browser_download_url
           )}
+          {@const androidAssets = assets.filter(isAndroidInstall)}
+          {@const windowsAssets = assets.filter(isWindowsInstall)}
           <div class="release-card">
             <div class="release-topline">
               <span class="release-label">LATEST RELEASE</span>
               <span class="release-rule"></span>
               <span class="release-date">{projectRelease.value.tag_name || 'Latest'}</span>
             </div>
-            {#if assets.length}
-              <div class="project-release-assets">
-                {#each assets as asset (asset.name)}
-                  <a
-                    class="download-button"
-                    href={asset.download_url
-                      ? new URL(asset.download_url, `${API_BASE}/`).href
-                      : asset.browser_download_url}
-                    download
-                  >
-                    {asset.name} <span aria-hidden="true">↓</span>
-                  </a>
-                {/each}
+            {#if androidAssets.length || windowsAssets.length}
+              <div class="project-release-platforms">
+                {#if androidAssets.length}
+                  <section class="release-platform" aria-label="Android installation files">
+                    <h2>Android</h2>
+                    <div class="platform-downloads">
+                      {#each androidAssets as asset (asset.name)}
+                        <a class="download-button" href={getAssetDownloadUrl(asset)} download={asset.name}>
+                          {asset.name} <span aria-hidden="true">↓</span>
+                        </a>
+                      {/each}
+                    </div>
+                  </section>
+                {/if}
+                {#if windowsAssets.length}
+                  <section class="release-platform" aria-label="Windows installation files">
+                    <h2>Windows</h2>
+                    <div class="platform-downloads">
+                      {#each windowsAssets as asset (asset.name)}
+                        {#if /\.zip$/i.test(asset.name)}
+                          <button
+                            class="download-button"
+                            type="button"
+                            disabled={pendingWindowsDownloads.has(asset.name)}
+                            onclick={() => void downloadWindowsExecutable(asset)}
+                          >
+                            {pendingWindowsDownloads.has(asset.name)
+                              ? 'Preparing installer…'
+                              : /\.exe\.zip$/i.test(asset.name)
+                                ? asset.name.replace(/\.zip$/i, '')
+                                : `Extract .exe from ${asset.name}`}
+                            <span aria-hidden="true">↓</span>
+                          </button>
+                          {#if windowsDownloadErrors[asset.name]}
+                            <p class="download-error" role="alert">{windowsDownloadErrors[asset.name]}</p>
+                          {/if}
+                        {:else}
+                          <a class="download-button" href={getAssetDownloadUrl(asset)} download={asset.name}>
+                            {asset.name} <span aria-hidden="true">↓</span>
+                          </a>
+                        {/if}
+                      {/each}
+                    </div>
+                  </section>
+                {/if}
               </div>
             {:else}
               <div class="state-panel">
-                <strong>Release published, no downloadable files yet.</strong>
-                <span>Check back soon for project assets.</span>
+                <strong>No Android or Windows installers are available yet.</strong>
+                <span>APK and EXE installation files will appear here when published.</span>
               </div>
             {/if}
           </div>
