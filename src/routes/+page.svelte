@@ -75,6 +75,8 @@
 
   const isAndroidInstall = (asset: ApiAsset) => /\.apk$/i.test(asset.name);
   const isWindowsInstall = (asset: ApiAsset) => /\.(?:exe|zip)$/i.test(asset.name);
+  const getWindowsDownloadLabel = (asset: ApiAsset) =>
+    `Download ${asset.name.replace(/\.zip$/i, '')}`;
   const getAssetDownloadUrl = (asset: ApiAsset) =>
     asset.download_url
       ? new URL(asset.download_url, `${API_BASE}/`).href
@@ -2111,9 +2113,7 @@
                           >
                             {pendingWindowsDownloads.has(asset.name)
                               ? 'Preparing installer…'
-                              : /\.exe\.zip$/i.test(asset.name)
-                                ? asset.name.replace(/\.zip$/i, '')
-                                : `Extract .exe from ${asset.name}`}
+                              : getWindowsDownloadLabel(asset)}
                             <span aria-hidden="true">↓</span>
                           </button>
                           {#if windowsDownloadErrors[asset.name]}
@@ -2201,9 +2201,7 @@
                           >
                             {pendingWindowsDownloads.has(asset.name)
                               ? 'Preparing installer…'
-                              : /\.exe\.zip$/i.test(asset.name)
-                                ? asset.name.replace(/\.zip$/i, '')
-                                : `Extract .exe from ${asset.name}`}
+                              : getWindowsDownloadLabel(asset)}
                             <span aria-hidden="true">↓</span>
                           </button>
                           {#if windowsDownloadErrors[asset.name]}
