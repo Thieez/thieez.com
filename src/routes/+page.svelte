@@ -3,8 +3,9 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { unzipSync } from 'fflate';
+  import MarkdownIt from 'markdown-it';
   import type { PageData } from './$types';
-  import { getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjectLatestBuild, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiAsset, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
+  import { getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjectDocs, getProjectLatestBuild, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiAsset, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
   import { addAdminAccessEntry, createUserApiKey, deleteAccount as deleteAccountRequest, getAdminAccess, getAdminUserDevices, getAlphaAccessStatus, getLastKnownAuthSession, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AlphaAccessStatus, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
@@ -29,6 +30,10 @@
   let projectName = data.projectName;
   let projectReleaseStatus: ProjectReleaseStatus = data.projectReleaseStatus;
   let projectRelease: CachedResult<LatestBuild> | null = data.projectRelease;
+  let projectDocsHtml = '';
+  let projectDocsError = '';
+  let projectDocsStarted = false;
+  const markdown = new MarkdownIt({ html: false, linkify: true });
   let currentProject = data.project;
   let projectReleaseLoading =
     data.isProjectHost &&
@@ -326,6 +331,18 @@
     }
   };
 
+  const loadHostedProjectDocs = async () => {
+    if (!projectSlug || projectDocsStarted || accessDenied || accessCheckFailed) return;
+    projectDocsStarted = true;
+    try {
+      const content = await getProjectDocs(projectSlug);
+      if (content) projectDocsHtml = markdown.render(content);
+    } catch (cause) {
+      projectDocsError =
+        cause instanceof Error ? cause.message : 'Project documentation could not be loaded.';
+    }
+  };
+
   const loadStorageWhenVisible = (node: HTMLElement) => {
     if (storage) return;
     const loadStorage = () => {
@@ -461,6 +478,7 @@
       !accessDenied &&
       !accessCheckFailed
     ) {
+      void loadHostedProjectDocs();
       if (
         !projectReleaseStatus ||
         (projectReleaseStatus === 'released' && !projectRelease?.value)
@@ -2496,6 +2514,19 @@
           </div>
         {:else}
           <div class="state-panel"><strong>Nothing public yet.</strong><span>New projects will appear here as they leave the workbench.</span></div>
+        {/if}
+      </section>
+    {/if}
+    {#if data.isProjectHost && !accessDenied && !accessCheckFailed && (projectDocsHtml || projectDocsError)}
+      <section class="project-docs-section" aria-label={`${projectName} documentation`}>
+        {#if projectDocsError}
+          <div class="state-panel error-panel" role="alert">
+            <strong>Couldn’t load project documentation.</strong>
+            <span>{projectDocsError}</span>
+          </div>
+        {/if}
+        {#if projectDocsHtml}
+          <article class="project-docs-content">{@html projectDocsHtml}</article>
         {/if}
       </section>
     {/if}

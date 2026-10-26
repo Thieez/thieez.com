@@ -331,6 +331,20 @@ export async function getProjectLatestBuild(slug: string): Promise<LatestBuild |
   }
 }
 
+export async function getProjectDocs(slug: string): Promise<string | null> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/docs/v0/${encodeURIComponent(slug)}`,
+    { headers: { Accept: 'text/markdown' } }
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    const error = new Error(`API responded with ${response.status}`) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
+  }
+  return response.text();
+}
+
 export function getPluginZipAsset(build: PluginBuild): ApiAsset | undefined {
   const asset = build.assets.find((candidate) => candidate.name.toLowerCase().endsWith('.zip'));
   if (!asset) return undefined;
