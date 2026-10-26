@@ -2,7 +2,6 @@
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { unzipSync } from 'fflate';
   import MarkdownIt from 'markdown-it';
   import ProjectReleaseSection from '$lib/components/ProjectReleaseSection.svelte';
   import type { PageData } from './$types';
@@ -78,8 +77,6 @@
   let projectRefresh: Promise<void> | null = null;
   let error = data.build?.value ? '' : data.build?.error ?? '';
   let projectError = data.projects?.value ? '' : data.projects?.error ?? '';
-  let pendingWindowsDownloads = new Set<string>();
-  let windowsDownloadErrors: Record<string, string> = {};
   let lisnntoAndroidAssets: ApiAsset[] = [];
   let lisnntoWindowsAssets: ApiAsset[] = [];
   let apiStatus: 'checking' | 'online' | 'degraded' | 'offline' =
@@ -106,61 +103,6 @@
     asset.download_url
       ? new URL(asset.download_url, `${API_BASE}/`).href
       : asset.browser_download_url;
-
-  const downloadWindowsExecutable = async (asset: ApiAsset) => {
-    const downloadUrl = getAssetDownloadUrl(asset);
-    if (!downloadUrl) return;
-
-    pendingWindowsDownloads = new Set(pendingWindowsDownloads).add(asset.name);
-    windowsDownloadErrors = { ...windowsDownloadErrors, [asset.name]: '' };
-    try {
-      const response = await fetch(downloadUrl);
-      if (!response.ok) {
-        throw new Error(`The download failed (${response.status}).`);
-      }
-
-      const archive = new Uint8Array(await response.arrayBuffer());
-      const executables = unzipSync(archive, {
-        filter: ({ name }) => name.toLowerCase().endsWith('.exe')
-      });
-      const executablePaths = Object.keys(executables);
-      const expectedName = asset.name.replace(/\.zip$/i, '').toLowerCase();
-      const executablePath = executablePaths.find(
-        (path) => path.split(/[\\/]/).pop()?.toLowerCase() === expectedName
-      ) ?? (executablePaths.length === 1 ? executablePaths[0] : undefined);
-
-      if (!executablePath) {
-        throw new Error(
-          executablePaths.length
-            ? 'The ZIP contains multiple .exe files and the installer could not be identified.'
-            : 'The ZIP does not contain a Windows .exe installer.'
-        );
-      }
-
-      const executableName = executablePath.split(/[\\/]/).pop();
-      if (!executableName) throw new Error('The ZIP contains an invalid executable filename.');
-
-      const objectUrl = URL.createObjectURL(
-        new Blob([executables[executablePath]], { type: 'application/vnd.microsoft.portable-executable' })
-      );
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = executableName;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-    } catch (cause) {
-      windowsDownloadErrors = {
-        ...windowsDownloadErrors,
-        [asset.name]: cause instanceof Error ? cause.message : 'The installer could not be extracted.'
-      };
-    } finally {
-      const pending = new Set(pendingWindowsDownloads);
-      pending.delete(asset.name);
-      pendingWindowsDownloads = pending;
-    }
-  };
 
   let hasProjectsData = data.projects?.value !== null && data.projects?.value !== undefined;
   let authSession: AuthSession | null = null;
@@ -1495,10 +1437,7 @@
             loading={projectReleaseLoading}
             release={projectRelease?.value ?? null}
             error={projectRelease?.error ?? ''}
-            {pendingWindowsDownloads}
-            {windowsDownloadErrors}
             {getAssetDownloadUrl}
-            downloadWindowsExecutable={(asset) => void downloadWindowsExecutable(asset)}
           />
         {/if}
         {#if projectDocsAfterHtml}
@@ -1509,10 +1448,7 @@
             loading={projectReleaseLoading}
             release={projectRelease?.value ?? null}
             error={projectRelease?.error ?? ''}
-            {pendingWindowsDownloads}
-            {windowsDownloadErrors}
             {getAssetDownloadUrl}
-            downloadWindowsExecutable={(asset) => void downloadWindowsExecutable(asset)}
           />
         {/if}
       </section>
@@ -2238,34 +2174,19 @@
                     <h2>Windows</h2>
                     <div class="platform-downloads">
                       {#each windowsAssets as asset (asset.name)}
-                        {#if /\.zip$/i.test(asset.name)}
-                          <button
-                            class="download-button"
-                            type="button"
-                            disabled={pendingWindowsDownloads.has(asset.name)}
-                            aria-label={`Download for Windows (${asset.name})`}
-                            onclick={() => void downloadWindowsExecutable(asset)}
-                          >
-                            {pendingWindowsDownloads.has(asset.name)
-                              ? 'Preparing installer…'
-                              : 'Install'}
-                            <span aria-hidden="true">↓</span>
-                          </button>
-                          {#if windowsDownloadErrors[asset.name]}
-                            <p class="download-error" role="alert">{windowsDownloadErrors[asset.name]}</p>
-                          {/if}
-                        {:else}
-                          <a
-                            class="download-button"
-                            href={getAssetDownloadUrl(asset)}
-                            download={asset.name}
-                            aria-label={`Download for Windows (${asset.name})`}
-                          >
-                            Install <span aria-hidden="true">↓</span>
-                          </a>
-                        {/if}
+                        <a
+                          class="download-button"
+                          href={getAssetDownloadUrl(asset)}
+                          download={asset.name}
+                          aria-label={`Download Windows package (${asset.name})`}
+                        >
+                          Download ZIP <span aria-hidden="true">↓</span>
+                        </a>
                       {/each}
                     </div>
+                    {#if windowsAssets.some((asset) => /\.zip$/i.test(asset.name))}
+                      <p>Extract the ZIP before launching lisnnto.exe.</p>
+                    {/if}
                   </section>
                 {/if}
               </div>
@@ -2343,34 +2264,19 @@
                   <section class="release-platform" aria-label="Windows installation files">
                     <div class="platform-downloads">
                       {#each lisnntoWindowsAssets as asset (asset.name)}
-                        {#if /\.zip$/i.test(asset.name)}
-                          <button
-                            class="download-button"
-                            type="button"
-                            disabled={pendingWindowsDownloads.has(asset.name)}
-                            aria-label={`Install for Windows (${asset.name})`}
-                            onclick={() => void downloadWindowsExecutable(asset)}
-                          >
-                            {pendingWindowsDownloads.has(asset.name)
-                              ? 'Preparing installer…'
-                              : 'Windows'}
-                            <span aria-hidden="true">↓</span>
-                          </button>
-                          {#if windowsDownloadErrors[asset.name]}
-                            <p class="download-error" role="alert">{windowsDownloadErrors[asset.name]}</p>
-                          {/if}
-                        {:else}
-                          <a
-                            class="download-button"
-                            href={getAssetDownloadUrl(asset)}
-                            download={asset.name}
-                            aria-label={`Install for Windows (${asset.name})`}
-                          >
-                            Windows <span aria-hidden="true">↓</span>
-                          </a>
-                        {/if}
+                        <a
+                          class="download-button"
+                          href={getAssetDownloadUrl(asset)}
+                          download={asset.name}
+                          aria-label={`Download Windows package (${asset.name})`}
+                        >
+                          Windows ZIP <span aria-hidden="true">↓</span>
+                        </a>
                       {/each}
                     </div>
+                    {#if lisnntoWindowsAssets.some((asset) => /\.zip$/i.test(asset.name))}
+                      <p>Extract the ZIP before launching lisnnto.exe.</p>
+                    {/if}
                   </section>
                 {/if}
               </div>

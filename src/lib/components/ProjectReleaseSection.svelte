@@ -4,10 +4,7 @@
   export let loading: boolean;
   export let release: LatestBuild | null;
   export let error: string;
-  export let pendingWindowsDownloads: Set<string>;
-  export let windowsDownloadErrors: Record<string, string>;
   export let getAssetDownloadUrl: (asset: ApiAsset) => string | undefined;
-  export let downloadWindowsExecutable: (asset: ApiAsset) => void;
 
   const isAndroidInstall = (asset: ApiAsset) => /\.apk$/i.test(asset.name);
   const isWindowsInstall = (asset: ApiAsset) => /\.(?:exe|zip)$/i.test(asset.name);
@@ -61,32 +58,19 @@
               <h3>Windows</h3>
               <div class="platform-downloads">
                 {#each windowsAssets as asset (asset.name)}
-                  {#if /\.zip$/i.test(asset.name)}
-                    <button
-                      class="download-button"
-                      type="button"
-                      disabled={pendingWindowsDownloads.has(asset.name)}
-                      aria-label={`Download for Windows (${asset.name})`}
-                      onclick={() => downloadWindowsExecutable(asset)}
-                    >
-                      {pendingWindowsDownloads.has(asset.name) ? 'Preparing…' : 'Download'}
-                      <span aria-hidden="true">↓</span>
-                    </button>
-                    {#if windowsDownloadErrors[asset.name]}
-                      <p class="download-error" role="alert">{windowsDownloadErrors[asset.name]}</p>
-                    {/if}
-                  {:else}
-                    <a
-                      class="download-button"
-                      href={getAssetDownloadUrl(asset)}
-                      download={asset.name}
-                      aria-label={`Download for Windows (${asset.name})`}
-                    >
-                      Download <span aria-hidden="true">↓</span>
-                    </a>
-                  {/if}
+                  <a
+                    class="download-button"
+                    href={getAssetDownloadUrl(asset)}
+                    download={asset.name}
+                    aria-label={`Download Windows package (${asset.name})`}
+                  >
+                    Download ZIP <span aria-hidden="true">↓</span>
+                  </a>
                 {/each}
               </div>
+              {#if windowsAssets.some((asset) => /\.zip$/i.test(asset.name))}
+                <p>Extract the ZIP before launching lisnnto.exe.</p>
+              {/if}
             </section>
           {/if}
         </div>

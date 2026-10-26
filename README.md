@@ -21,9 +21,9 @@ state. Asset download
 URLs are resolved against the API origin, including when the API returns a
 relative path.
 Released project pages, including Lisnnto, group every `.apk` under Android
-and every `.exe` or `.zip` under Windows. Windows ZIP downloads are inspected
-in the browser and save only the contained `.exe`; archives with no executable
-or an ambiguous set of executables show an error instead of downloading the ZIP.
+and every `.exe` or `.zip` under Windows. Windows ZIP downloads provide the
+complete package, including required runtime DLLs and application assets; extract
+the ZIP before launching the executable.
 Published project pages load `docs/lander.md` from the matching repository.
 Markdown can place release downloads with `<!-- releases -->`; otherwise they
 appear after the document. Raw HTML is disabled, and relative image paths are
