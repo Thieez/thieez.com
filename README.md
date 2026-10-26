@@ -20,10 +20,10 @@ returns an empty project list; other API failures remain visible as an error
 state. Asset download
 URLs are resolved against the API origin, including when the API returns a
 relative path.
-Released project pages group every `.apk` under Android and every `.exe` or
-`.zip` under Windows. Windows ZIP downloads are inspected in the browser and
-save only the contained `.exe`; archives with no executable or an ambiguous
-set of executables show an error instead of downloading the ZIP.
+Released project pages, including Lisnnto, group every `.apk` under Android
+and every `.exe` or `.zip` under Windows. Windows ZIP downloads are inspected
+in the browser and save only the contained `.exe`; archives with no executable
+or an ambiguous set of executables show an error instead of downloading the ZIP.
 
 The homepage subscribes to `wss://api.thieez.com/projects/v0/updates` and
 refreshes the list after a signed GitHub `Repository` webhook event. The

@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import { unzipSync } from 'fflate';
   import type { PageData } from './$types';
-  import { getApkAsset, getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjectLatestBuild, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiAsset, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
+  import { getDatabaseStorage, getLatestBuild, getLatestPluginBuild, getPluginZipAsset, getProjectLatestBuild, getProjects, getRenderLimits, formatReleaseDate, API_BASE, subscribeToApiHeartbeat, subscribeToProjectUpdates, type ApiAsset, type ApiHeartbeatConnection, type DatabaseStorage, type LatestBuild, type LisnntoLimits, type Project, type RenderLimits, type RenderMetricSeries } from '$lib/api';
   import { addAdminAccessEntry, createUserApiKey, deleteAccount as deleteAccountRequest, getAdminAccess, getAdminUserDevices, getAlphaAccessStatus, getLastKnownAuthSession, getLisnntoLimits, getProjectAccess, getUserApiKeys, grantAdminAppAccess, kickAdminUser, logout, removeAdminAccessEntry, removeAdminDeviceTrust, restoreAuth, revokeAdminAppAccess, revokeUserApiKey, sendPresenceHeartbeat, setAdminAllProjectsAccess, signOutAdminDevice, startLogin, updateAdminAlphaRequest, updateWhitelistSetting, type AdminAccessData, type AdminDevice, type AlphaAccessStatus, type AuthSession, type ProjectAccessStatus, type UserApiKey } from '$lib/auth-client';
 
   export let data: PageData;
@@ -53,6 +53,8 @@
   let projectError = data.projects?.value ? '' : data.projects?.error ?? '';
   let pendingWindowsDownloads = new Set<string>();
   let windowsDownloadErrors: Record<string, string> = {};
+  let lisnntoAndroidAssets: ApiAsset[] = [];
+  let lisnntoWindowsAssets: ApiAsset[] = [];
   let apiStatus: 'checking' | 'online' | 'degraded' | 'offline' =
     data.build?.stale || data.projects?.stale || data.projects?.value?.source === 'fallback'
       ? 'degraded'
@@ -1175,7 +1177,12 @@
   $: userInitial = userLabel.trim().charAt(0).toUpperCase() || 'A';
   $: avatarUrl = authSession?.user?.avatar_url ?? cachedAuthSession?.user?.avatar_url;
 
-  $: apk = build ? getApkAsset(build) : undefined;
+  $: lisnntoAndroidAssets = isLisnnto
+    ? (build?.assets.filter(isAndroidInstall) ?? [])
+    : [];
+  $: lisnntoWindowsAssets = isLisnnto
+    ? (build?.assets.filter(isWindowsInstall) ?? [])
+    : [];
   $: pluginZip = build && isNote ? getPluginZipAsset(build) : undefined;
 
   const formatBytes = (bytes: number): string => {
@@ -2156,22 +2163,78 @@
             <span>{error}</span>
             <button class="text-button" onclick={load}>Try again <span aria-hidden="true">↗</span></button>
           </div>
-        {:else if build && (apk || pluginZip)}
+        {:else if build && (isLisnnto
+          ? lisnntoAndroidAssets.length > 0 || lisnntoWindowsAssets.length > 0
+          : pluginZip)}
           <div class="release-card">
             <div class="release-topline">
               <span class="release-label">LATEST RELEASE</span>
               <span class="release-rule"></span>
               <span class="release-date">{formatReleaseDate(build.published_at)}</span>
             </div>
-            <div class="release-details">
-              <div>
-                <p class="version">{build.tag_name || 'Latest'}</p>
-                <p class="asset-name">{(apk || pluginZip)?.name}</p>
+            {#if isLisnnto}
+              <p class="version">{build.tag_name || 'Latest'}</p>
+              <div class="project-release-platforms">
+                {#if lisnntoAndroidAssets.length}
+                  <section class="release-platform" aria-label="Android installation files">
+                    <h2>Android</h2>
+                    <div class="platform-downloads">
+                      {#each lisnntoAndroidAssets as asset (asset.name)}
+                        <a class="download-button" href={getAssetDownloadUrl(asset)} download={asset.name}>
+                          {asset.name} <span aria-hidden="true">↓</span>
+                        </a>
+                      {/each}
+                    </div>
+                  </section>
+                {/if}
+                {#if lisnntoWindowsAssets.length}
+                  <section class="release-platform" aria-label="Windows installation files">
+                    <h2>Windows</h2>
+                    <div class="platform-downloads">
+                      {#each lisnntoWindowsAssets as asset (asset.name)}
+                        {#if /\.zip$/i.test(asset.name)}
+                          <button
+                            class="download-button"
+                            type="button"
+                            disabled={pendingWindowsDownloads.has(asset.name)}
+                            onclick={() => void downloadWindowsExecutable(asset)}
+                          >
+                            {pendingWindowsDownloads.has(asset.name)
+                              ? 'Preparing installer…'
+                              : /\.exe\.zip$/i.test(asset.name)
+                                ? asset.name.replace(/\.zip$/i, '')
+                                : `Extract .exe from ${asset.name}`}
+                            <span aria-hidden="true">↓</span>
+                          </button>
+                          {#if windowsDownloadErrors[asset.name]}
+                            <p class="download-error" role="alert">{windowsDownloadErrors[asset.name]}</p>
+                          {/if}
+                        {:else}
+                          <a class="download-button" href={getAssetDownloadUrl(asset)} download={asset.name}>
+                            {asset.name} <span aria-hidden="true">↓</span>
+                          </a>
+                        {/if}
+                      {/each}
+                    </div>
+                  </section>
+                {/if}
               </div>
-              <a class="download-button" href={(apk || pluginZip)?.browser_download_url || (apk || pluginZip)?.download_url} download={(apk || pluginZip)?.name}>
-                Download latest {isNote ? 'plugin' : 'APK'} <span aria-hidden="true">↓</span>
-              </a>
-            </div>
+            {:else if pluginZip}
+              <div class="release-details">
+                <div>
+                  <p class="version">{build.tag_name || 'Latest'}</p>
+                  <p class="asset-name">{pluginZip.name}</p>
+                </div>
+                <a class="download-button" href={pluginZip.browser_download_url || pluginZip.download_url} download={pluginZip.name}>
+                  Download latest plugin <span aria-hidden="true">↓</span>
+                </a>
+              </div>
+            {/if}
+          </div>
+        {:else if build}
+          <div class="state-panel">
+            <strong>No installer files are available yet.</strong>
+            <span>APK and Windows ZIP or EXE installers will appear here when published.</span>
           </div>
         {:else}
           <div class="state-panel">
